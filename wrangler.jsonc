@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "techcert",
+  "compatibility_date": "2026-09-30",
+  // Served on a subdomain of the main site; Cloudflare creates the DNS record and certificate.
+  "routes": [{ "pattern": "techcert.assist365.app", "custom_domain": true }],
+  // Static site only (no server code): Cloudflare serves the built files from dist/.
+  "assets": {
+    "directory": "./dist",
+    // Unknown paths like /courses/ai-security fall back to index.html so React Router handles them.
+    "not_found_handling": "single-page-application"
+  }
+}
