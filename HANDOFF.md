@@ -58,7 +58,17 @@ npm run deploy     # build + deploy to techcert.assist365.app
 
 - **AI Marketing Specialist** course — done and live (`src/data/aiMarketing.js`, new `abTest` lab in `src/components/blocks/MarketingLabs.jsx`).
 - **AI SEO & GEO Specialist** course — written (`src/data/aiSeoGeo.js`, uses the `geoLab` simulator; 8 lessons, 20-question bank, examSize 15, matching the `courses` row). Goes live with the next deploy.
-- **Stripe paywall** — to build. Pricing from Amir: AI Prompt Engineer certificate **€1.99**, every other course **€4.99**; after a first purchase the buyer gets **20% off their next purchase**, usable on any course. Suggested design: Stripe Checkout created by a Supabase Edge Function (secret key stays server-side), a signature-verified webhook function writing a `purchases` table, entitlement checks in `submit_exam` and the UI, and a single-use 20% promotion code restricted to that Stripe customer, issued by the webhook after the first payment. Use test mode first; EU VAT (Stripe Tax / OSS) needs a decision before going live.
+- **Stripe paywall** — built, not yet live. Decisions (Amir, Oct 2026): lessons are free; **the exam + certificate** are paid per course — AI Prompt Engineer **€1.99**, every other course **€4.99**, VAT-inclusive via **Stripe Tax**; after a first paid purchase **every later purchase is 20% off** (€1.59 / €3.99). Admins and holders of a valid certificate (including admin-issued ones) bypass the paywall; a fully refunded purchase removes access and the discount.
+  - DB: `supabase/migrations/20261009000000_stripe_paywall.sql` — `courses.price_cents`, `purchases` table (RLS: read own; only the service role writes), `price_for()` (service role only — the one place prices are computed), `course_price()` (public wrapper for the UI), `has_exam_access()`, and `submit_exam` now rejects unpaid attempts. 15 new checks in `npm run test:db`.
+  - Edge Functions (`supabase/functions/`, both `verify_jwt = false` and authorized in code): `create-checkout` (checks the user's token, charges `price_for()`, Stripe Checkout with automatic tax) and `stripe-webhook` (verifies the Stripe signature; records `checkout.session.completed` / `async_payment_succeeded`; marks full refunds from `charge.refunded`).
+  - UI: price on the course page; buy button on the exam page; after returning from Stripe the page waits for the webhook. Local mode has no paywall.
+  - **Go-live steps, in order (test mode first):**
+    1. Stripe (test mode): Settings → Tax → add head-office address, turn on Stripe Tax, register for EU OSS when going live. Developers → Webhooks → add endpoint `https://dtcovmttntdwihzxsuvl.supabase.co/functions/v1/stripe-webhook` with events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded`; copy its signing secret.
+    2. Supabase → Edge Functions → Secrets: `STRIPE_SECRET_KEY` (sk_test_…), `STRIPE_WEBHOOK_SECRET` (whsec_…). Optional: `SITE_URL`, `STRIPE_AUTOMATIC_TAX=false` to test before Stripe Tax is set up. **Never put Stripe secret keys in `.env`, the repo or GitHub.**
+    3. Apply the migration and deploy both functions (Supabase connector, or `supabase db push` + `supabase functions deploy`).
+    4. Merge to `main` → the Deploy workflow ships the site (needs T13 secrets). Until the new site is live, the old site still shows "Start exam" but its submission will be rejected for unpaid learners, so do steps 3 and 4 together.
+    5. Test with card 4242 4242 4242 4242: buy a course → exam unlocks; buy a second → 20% off; refund in Stripe → access removed.
+    6. Switch to live keys (new webhook endpoint + secret in live mode).
 
 Legend — **Owner:** *Amir* = needs account-owner action, *Faraz* = code.
 
@@ -142,8 +152,12 @@ Enforce server-side (in `start_exam`, T4): e.g. max 3 attempts per course per 24
 #### T12 · More courses — *Faraz*
 Courses are data: add a file in `src/data/`, register it in `src/data/courses.js`, add a row to the `courses` table (pass mark, lesson count, exam size), and questions (T4). Block types are listed in the README.
 
-#### T13 · Automatic deploys — *Faraz*
-CI already runs lint/build/tests (`.github/workflows/ci.yml`). Add a deploy job on `main`: create a Cloudflare API token (Workers Scripts: Edit, scoped to the account), store it as GitHub secret `CLOUDFLARE_API_TOKEN` plus `CLOUDFLARE_ACCOUNT_ID`, add `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` as repository variables, and run `npx wrangler deploy` after the build.
+#### T13 · Automatic deploys — *Amir* (secrets only; workflow done)
+`.github/workflows/deploy.yml` lints, tests, builds and runs `wrangler deploy` on every push to `main`. One-time setup in GitHub → Settings → Secrets and variables → Actions:
+- **Secrets:** `CLOUDFLARE_API_TOKEN` (Cloudflare → My Profile → API Tokens → template "Edit Cloudflare Workers", scoped to the account) and `CLOUDFLARE_ACCOUNT_ID`.
+- **Variables:** `VITE_SUPABASE_URL` = `https://dtcovmttntdwihzxsuvl.supabase.co`, `VITE_SUPABASE_ANON_KEY` = the publishable key (`sb_publishable_…`, public by design).
+
+The workflow fails early if the variables are missing, so it never ships a local-mode build.
 
 #### T14 · Accessibility audit — *Faraz*
 WCAG 2.1 AA pass: keyboard-only walkthrough of every activity type (matching, sorting and the sliders especially), screen-reader labels on range inputs, focus management in the sign-in modal, colour contrast in dark mode.

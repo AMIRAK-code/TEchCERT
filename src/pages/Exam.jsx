@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, Navigate, useParams } from 'react-router-dom';
-import { Award, BadgeCheck, Check, ClipboardList, Lock, RotateCcw, Timer, X } from 'lucide-react';
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
+import { Award, BadgeCheck, Check, ClipboardList, CreditCard, Lock, RotateCcw, Timer, X } from 'lucide-react';
 import { getCourse } from '../data/courses';
 import { useApp, useCourseProgress } from '../store/AppStore';
 import { shuffle } from '../lib/shuffle';
 import { Rich } from '../lib/RichText';
+import { useExamPrice } from '../lib/useExamPrice';
+import { formatPrice, startCheckout } from '../lib/supabase';
 
 function drawExam(course) {
   return shuffle(course.examQuestions)
@@ -29,12 +31,50 @@ export default function Exam() {
 }
 
 function ExamFlow({ course }) {
-  const { user, openSignIn, certificates } = useApp();
+  const { user, openSignIn, certificates, mode } = useApp();
   const progress = useCourseProgress(course);
   const [phase, setPhase] = useState('intro'); // intro | running | result
   const [questions, setQuestions] = useState([]);
   const [result, setResult] = useState(null);
   const existing = user && certificates.find(c => c.courseId === course.id && c.email === user.email);
+  const { price, error: priceError, refresh: refreshPrice } = useExamPrice(course.id, user?.id);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const checkout = searchParams.get('checkout'); // success | cancel (back from Stripe)
+  const [confirming, setConfirming] = useState(false);
+  const [buying, setBuying] = useState(false);
+  const [buyError, setBuyError] = useState('');
+
+  // Back from Stripe: the webhook records the purchase within seconds; poll until access shows up.
+  useEffect(() => {
+    if (checkout !== 'success' || !user) return;
+    let cancelled = false;
+    (async () => {
+      setConfirming(true);
+      for (let i = 0; i < 15 && !cancelled; i++) {
+        const p = await refreshPrice();
+        if (p?.has_access) break;
+        await new Promise(r => setTimeout(r, 2000));
+      }
+      if (!cancelled) {
+        setConfirming(false);
+        setSearchParams({}, { replace: true });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [checkout, user, refreshPrice, setSearchParams]);
+
+  const buy = async () => {
+    setBuying(true);
+    setBuyError('');
+    try {
+      await startCheckout(course.id);
+    } catch (err) {
+      setBuyError(err.message);
+      setBuying(false);
+    }
+  };
 
   const start = () => {
     setQuestions(drawExam(course));
@@ -110,6 +150,34 @@ function ExamFlow({ course }) {
               Sign in to start
             </button>
           </>
+        ) : confirming ? (
+          <p className="muted">Confirming your payment…</p>
+        ) : price && !price.has_access ? (
+          <>
+            {checkout === 'cancel' && <p className="muted small">Checkout was cancelled — you have not been charged.</p>}
+            <div className="price-tag">
+              {price.discounted && <s className="muted">{formatPrice(price.base_cents, price.currency)}</s>}
+              <strong>{formatPrice(price.price_cents, price.currency)}</strong>
+              <span className="muted small">{price.discounted ? 'returning-learner price, 20% off · ' : ''}incl. VAT · one-time</span>
+            </div>
+            <p className="muted small">Unlocks the exam and your verifiable certificate. Retakes are included.</p>
+            <button className="btn-primary" onClick={buy} disabled={buying}>
+              <CreditCard size={18} /> {buying ? 'Opening checkout…' : 'Buy exam & certificate'}
+            </button>
+            {buyError && (
+              <div className="feedback bad">
+                <X size={18} />
+                <div>{buyError}</div>
+              </div>
+            )}
+          </>
+        ) : priceError ? (
+          <div className="feedback bad">
+            <X size={18} />
+            <div>{priceError}</div>
+          </div>
+        ) : mode === 'cloud' && !price ? (
+          <p className="muted">Loading…</p>
         ) : (
           <>
             <p className="muted small">

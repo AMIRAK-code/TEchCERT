@@ -88,3 +88,25 @@ export async function adminSetRevoked(credId, revoked) {
   const { error } = await supabase.from('certificates').update({ revoked }).eq('cred_id', credId);
   if (error) throw error;
 }
+
+// ---- paywall (exam + certificate are paid; lessons are free)
+// { base_cents, price_cents, discounted, currency, has_access }. Works signed out too.
+export async function getExamPrice(courseId) {
+  const { data, error } = await supabase.rpc('course_price', { p_course_id: courseId });
+  if (error) throw error;
+  return data;
+}
+
+// Redirects to Stripe Checkout. The amount is decided on the server.
+export async function startCheckout(courseId) {
+  const { data, error } = await supabase.functions.invoke('create-checkout', { body: { course_id: courseId } });
+  if (error) {
+    const body = await error.context?.json?.().catch(() => null);
+    throw new Error(body?.error || 'Could not start checkout. Please try again.');
+  }
+  window.location.assign(data.url);
+}
+
+export function formatPrice(cents, currency = 'eur') {
+  return new Intl.NumberFormat('en-IE', { style: 'currency', currency: currency.toUpperCase() }).format(cents / 100);
+}

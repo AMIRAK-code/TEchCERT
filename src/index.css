@@ -1420,6 +1420,10 @@ input[type='range'] { width: 100%; accent-color: var(--accent); }
 
 .exam-rules div { display: flex; flex-direction: column; padding: 16px 8px; background: var(--paper); }
 .exam-rules div + div { border-left: 1px solid var(--line); }
+.price-tag { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 20px 0 4px; font-family: var(--mono); }
+.price-tag strong { font-size: 2rem; }
+.price-tag s { font-size: 1.1rem; }
+.price-tag span { flex-basis: 100%; }
 .exam-rules strong { font-family: var(--mono); font-size: 1.35rem; }
 .exam-rules span { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); }
 .pad-lg.center .btn-primary { margin-top: 16px; }
