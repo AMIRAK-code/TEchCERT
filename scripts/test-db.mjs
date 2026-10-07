@@ -10,7 +10,7 @@ const db = new PGlite();
 
 // --- stub the parts of Supabase the migrations rely on
 await db.exec(`
-  create role anon nologin; create role authenticated nologin;
+  create role anon nologin; create role authenticated nologin; create role service_role nologin;
   create schema auth;
   create table auth.users (id uuid primary key default gen_random_uuid(), email text, raw_user_meta_data jsonb default '{}');
   create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
@@ -58,6 +58,32 @@ r = await as(ada.id, L, `select submit_exam('ai-security', 3, 3)`);
 check('exam rejected when total ≠ exam size', isError(r, 'Invalid exam result'), r);
 
 for (let i = 0; i < 8; i++) await as(ada.id, L, `insert into lesson_progress (course_id, lesson_id) values ('ai-security', 'l${i}')`);
+r = await as(ada.id, L, `select submit_exam('ai-security', 15, 15)`);
+check('exam rejected without a purchase', isError(r, 'Purchase the exam'), r);
+
+// --- pricing & purchases
+let price = (await as(null, 'anon', `select course_price('ai-prompt-engineer') p`))[0].p;
+check('anonymous visitors see the base price', price.price_cents === 199 && !price.discounted && !price.has_access, price);
+price = (await as(ada.id, L, `select course_price('ai-security') p`))[0].p;
+check('first purchase is full price (€4.99)', price.price_cents === 499 && !price.discounted && !price.has_access, price);
+r = await as(ada.id, L, `insert into purchases (user_id, course_id, stripe_session_id, amount_cents, currency) values ('${ada.id}', 'ai-security', 'cs_fake', 0, 'eur')`);
+check('learner cannot insert purchases', isError(r, 'row-level security'), r);
+r = await as(ada.id, L, `select price_for('${ada.id}', 'ai-security')`);
+check('learner cannot call price_for directly', isError(r, 'permission denied'), r);
+r = await as(ada.id, L, `select has_exam_access('${ada.id}', 'ai-security')`);
+check('learner cannot call has_exam_access directly', isError(r, 'permission denied'), r);
+// what the stripe-webhook function does with the service role
+await db.query(`insert into purchases (user_id, course_id, stripe_session_id, stripe_payment_intent, amount_cents, currency) values ($1, 'ai-security', 'cs_test_1', 'pi_1', 499, 'eur')`, [ada.id]);
+price = (await as(ada.id, L, `select course_price('ai-security') p`))[0].p;
+check('purchase grants exam access', price.has_access === true, price);
+price = (await as(ada.id, L, `select course_price('ai-prompt-engineer') p`))[0].p;
+check('later purchases are 20% off (€1.99 → €1.59)', price.price_cents === 159 && price.discounted && !price.has_access, price);
+price = (await as(ada.id, L, `select course_price('ai-marketing') p`))[0].p;
+check('later purchases are 20% off (€4.99 → €3.99)', price.price_cents === 399 && price.discounted, price);
+r = await as(ada.id, L, 'select stripe_session_id from purchases');
+check('learner sees own purchases', r.length === 1 && r[0].stripe_session_id === 'cs_test_1', r);
+r = await as(null, 'anon', 'select * from purchases');
+check('anonymous users cannot read purchases', Array.isArray(r) && r.length === 0, r);
 r = (await as(ada.id, L, `select submit_exam('ai-security', 9, 15) r`))[0].r;
 check('failing score issues no certificate', r.passed === false && r.certificate === null, r);
 const pass = (await as(ada.id, L, `select submit_exam('ai-security', 12, 15) r`))[0].r;
@@ -97,6 +123,22 @@ check('verification reports revocation', r[0]?.revoked === true, r);
 const [np] = (await db.query(`insert into auth.users (email) values ('new.person@x.com') returning id`)).rows;
 r = (await db.query('select cred_id from certificates where user_id=$1', [np.id])).rows;
 check('late sign-up receives admin-issued certificate', r.length === 1, r);
+// refunded purchases no longer grant access or the discount
+const [bob] = (await db.query(`insert into auth.users (email) values ('bob@example.com') returning id`)).rows;
+for (let i = 0; i < 8; i++) await as(bob.id, L, `insert into lesson_progress (course_id, lesson_id) values ('ai-marketing', 'l${i}')`);
+await db.query(`insert into purchases (user_id, course_id, stripe_session_id, stripe_payment_intent, amount_cents, currency, status) values ($1, 'ai-marketing', 'cs_test_2', 'pi_2', 499, 'eur', 'refunded')`, [bob.id]);
+r = await as(bob.id, L, `select submit_exam('ai-marketing', 15, 15)`);
+check('refunded purchase does not grant exam access', isError(r, 'Purchase the exam'), r);
+price = (await as(bob.id, L, `select course_price('ai-seo-geo') p`))[0].p;
+check('refunded purchase does not earn the discount', price.price_cents === 499 && !price.discounted, price);
+
+// admins bypass the paywall
+for (let i = 0; i < 8; i++) await as(amir.id, L, `insert into lesson_progress (course_id, lesson_id) values ('ai-marketing', 'l${i}')`);
+r = (await as(amir.id, L, `select submit_exam('ai-marketing', 12, 15) r`))[0]?.r;
+check('admins take exams without purchasing', r?.passed === true, r);
+r = await db.exec(fs.readFileSync(root + '20261009000000_stripe_paywall.sql', 'utf8')).then(() => 'ok', e => e.message);
+check('paywall migration is idempotent', r === 'ok', r);
+
 r = await db.exec(fs.readFileSync(root + '20260930000001_seed.sql', 'utf8')).then(() => 'ok', e => e.message);
 check('seed migration is idempotent', r === 'ok', r);
 

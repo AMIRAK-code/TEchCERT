@@ -3,6 +3,8 @@ import { BadgeCheck, CheckCircle2, Circle, ClipboardList, Clock, Lock, PlayCircl
 import { activityCount, getCourse, totalMinutes } from '../data/courses';
 import { useApp, useCourseProgress } from '../store/AppStore';
 import CourseIcon, { ProgressBar } from '../components/CourseIcon';
+import { useExamPrice } from '../lib/useExamPrice';
+import { formatPrice } from '../lib/supabase';
 
 export default function Course() {
   const { id } = useParams();
@@ -17,6 +19,7 @@ function CourseView({ course, user, certificates, attempts, resetCourse }) {
   const cert = user && certificates.find(c => c.courseId === course.id && c.email === user.email);
   const best = attempts.reduce((b, a) => Math.max(b, Math.round((a.score / a.total) * 100)), 0);
   const startLesson = p.done === 0 ? course.modules[0].lessons[0] : p.nextLesson;
+  const { price } = useExamPrice(course.id, user?.id);
 
   return (
     <div className="container narrow">
@@ -52,6 +55,22 @@ function CourseView({ course, user, certificates, attempts, resetCourse }) {
               {course.examSize} Q · {course.passMark}% pass
             </dd>
           </div>
+          {price && (
+            <div>
+              <dt>Certificate</dt>
+              <dd>
+                {price.has_access ? (
+                  'Unlocked'
+                ) : price.discounted ? (
+                  <>
+                    <s className="muted">{formatPrice(price.base_cents, price.currency)}</s> {formatPrice(price.price_cents, price.currency)}
+                  </>
+                ) : (
+                  formatPrice(price.price_cents, price.currency)
+                )}
+              </dd>
+            </div>
+          )}
         </dl>
 
         <ProgressBar percent={p.percent} label={`Course progress · ${p.done}/${p.total} lessons`} />
@@ -80,7 +99,11 @@ function CourseView({ course, user, certificates, attempts, resetCourse }) {
             </button>
           )}
         </div>
-        {!p.finished && !cert && <p className="muted small">Complete all lessons to unlock the exam.</p>}
+        {!p.finished && !cert && (
+          <p className="muted small">
+            Lessons are free. Complete them all to unlock the exam{price && !price.has_access ? ` — exam & certificate ${formatPrice(price.price_cents, price.currency)} incl. VAT` : ''}.
+          </p>
+        )}
         {attempts.length > 0 && (
           <p className="muted small">
             Exam attempts: {attempts.length} · Best score: {best}%
