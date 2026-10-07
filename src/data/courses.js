@@ -1,7 +1,8 @@
 import promptEngineering from './promptEngineering';
 import aiSecurity from './aiSecurity';
+import aiMarketing from './aiMarketing';
 
-export const courses = [promptEngineering, aiSecurity];
+export const courses = [promptEngineering, aiSecurity, aiMarketing];
 
 export function getCourse(id) {
   return courses.find(c => c.id === id);

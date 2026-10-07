@@ -1296,6 +1296,8 @@ input[type='range'] { width: 100%; accent-color: var(--accent); }
 .defense strong { display: block; font-size: 0.9rem; font-weight: 600; }
 .defense span { font-size: 0.8rem; color: var(--ink-3); }
 .defense.on { border-color: var(--ok); background: var(--ok-soft); }
+.defense.bad-on { border-color: var(--bad); background: var(--bad-soft); }
+.defense.bad-on input { accent-color: var(--bad); }
 
 .composer { display: flex; gap: 10px; align-items: flex-end; margin-top: 12px; }
 .composer .ix-textarea { flex: 1; }

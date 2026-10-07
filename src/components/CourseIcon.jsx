@@ -1,6 +1,6 @@
-import { BrainCircuit, GraduationCap, ShieldAlert } from 'lucide-react';
+import { BrainCircuit, GraduationCap, Megaphone, SearchCheck, ShieldAlert } from 'lucide-react';
 
-const ICONS = { BrainCircuit, ShieldAlert };
+const ICONS = { BrainCircuit, ShieldAlert, Megaphone, SearchCheck };
 
 export default function CourseIcon({ name, size = 32 }) {
   const Icon = ICONS[name] || GraduationCap;

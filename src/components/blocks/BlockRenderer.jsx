@@ -3,6 +3,7 @@ import { Rich } from '../../lib/RichText';
 import { Classify, Flashcards, Match, Order, Quiz, Scenario, SpotFlaw } from './Exercises';
 import { ChainOfThought, FewShot, PromptBuilder, PromptCompare, Temperature, Tokenizer } from './PromptLabs';
 import { ExtractionSim, InjectionLab, PoisonSim } from './SecurityLabs';
+import { AbTest, GeoLab } from './MarketingLabs';
 
 const INTERACTIVE = {
   quiz: Quiz,
@@ -21,6 +22,8 @@ const INTERACTIVE = {
   injectionLab: InjectionLab,
   poisonSim: PoisonSim,
   extractionSim: ExtractionSim,
+  abTest: AbTest,
+  geoLab: GeoLab,
 };
 
 const CALLOUT_ICONS = { tip: Lightbulb, warning: AlertTriangle, info: Info };
