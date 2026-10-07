@@ -57,7 +57,7 @@ npm run deploy     # build + deploy to techcert.assist365.app
 ### In progress (Oct 2026)
 
 - **AI Marketing Specialist** course — done and live (`src/data/aiMarketing.js`, new `abTest` lab in `src/components/blocks/MarketingLabs.jsx`).
-- **AI SEO & GEO Specialist** course — to build: `src/data/aiSeoGeo.js` (id `ai-seo-geo`, icon `SearchCheck`, 8 lessons, 20-question bank, examSize 15). The `geoLab` simulator is already written and registered. The `courses` table row already exists (8 lessons / 15 questions / 70%) — keep the file consistent with it.
+- **AI SEO & GEO Specialist** course — written (`src/data/aiSeoGeo.js`, uses the `geoLab` simulator; 8 lessons, 20-question bank, examSize 15, matching the `courses` row). Goes live with the next deploy.
 - **Stripe paywall** — to build. Pricing from Amir: AI Prompt Engineer certificate **€1.99**, every other course **€4.99**; after a first purchase the buyer gets **20% off their next purchase**, usable on any course. Suggested design: Stripe Checkout created by a Supabase Edge Function (secret key stays server-side), a signature-verified webhook function writing a `purchases` table, entitlement checks in `submit_exam` and the UI, and a single-use 20% promotion code restricted to that Stripe customer, issued by the webhook after the first payment. Use test mode first; EU VAT (Stripe Tax / OSS) needs a decision before going live.
 
 Legend — **Owner:** *Amir* = needs account-owner action, *Faraz* = code.
