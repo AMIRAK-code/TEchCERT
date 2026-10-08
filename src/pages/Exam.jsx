@@ -7,6 +7,7 @@ import { shuffle } from '../lib/shuffle';
 import { Rich } from '../lib/RichText';
 import { useExamPrice } from '../lib/useExamPrice';
 import { formatPrice, startCheckout } from '../lib/supabase';
+import VerifyEmailNotice from '../components/VerifyEmailNotice';
 
 function drawExam(course) {
   return shuffle(course.examQuestions)
@@ -31,7 +32,7 @@ export default function Exam() {
 }
 
 function ExamFlow({ course }) {
-  const { user, openSignIn, certificates, mode } = useApp();
+  const { user, openSignIn, certificates, mode, refreshAccount } = useApp();
   const progress = useCourseProgress(course);
   const [phase, setPhase] = useState('intro'); // intro | running | result
   const [questions, setQuestions] = useState([]);
@@ -52,7 +53,10 @@ function ExamFlow({ course }) {
       setConfirming(true);
       for (let i = 0; i < 15 && !cancelled; i++) {
         const p = await refreshPrice();
-        if (p?.has_access) break;
+        if (p?.has_access) {
+          await refreshAccount(); // picks up the purchase so the verify-email notice shows
+          break;
+        }
         await new Promise(r => setTimeout(r, 2000));
       }
       if (!cancelled) {
@@ -63,7 +67,7 @@ function ExamFlow({ course }) {
     return () => {
       cancelled = true;
     };
-  }, [checkout, user, refreshPrice, setSearchParams]);
+  }, [checkout, user, refreshPrice, refreshAccount, setSearchParams]);
 
   const buy = async () => {
     setBuying(true);
@@ -121,6 +125,8 @@ function ExamFlow({ course }) {
           </div>
         </div>
         <p className="muted">Questions and answer order are randomized each attempt. You can move between questions and change answers before submitting. The exam auto-submits when time runs out.</p>
+
+        <VerifyEmailNotice />
 
         {existing && (
           <div className="feedback good">
@@ -330,6 +336,7 @@ function ExamResult({ course, questions, result, onRetry }) {
             Back to course
           </Link>
         </div>
+        {result.passed && <VerifyEmailNotice />}
         {!result.passed && <p className="muted small">Tip: review the explanations below, revisit the related lessons, then retake — you'll get a fresh set of questions.</p>}
       </div>
 

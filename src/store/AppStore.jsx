@@ -1,7 +1,21 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { makeCredentialId } from '../lib/credential';
 import { ISSUED_CERTIFICATES, findStaff } from '../data/registry';
-import { MODE, clearCourse, loadAccount, saveLesson, sendMagicLink, submitExam, supabase } from '../lib/supabase';
+import {
+  MODE,
+  clearCourse,
+  loadAccount,
+  markEmailVerified,
+  saveLesson,
+  sendMagicLink,
+  sendPasswordReset,
+  sendVerificationLink,
+  signInWithPassword,
+  signUpWithPassword,
+  submitExam,
+  supabase,
+  updatePassword,
+} from '../lib/supabase';
 
 // Two storage modes (see lib/supabase.js):
 //   cloud — Supabase configured: magic-link auth, progress & certificates in Postgres.
@@ -10,10 +24,11 @@ import { MODE, clearCourse, loadAccount, saveLesson, sendMagicLink, submitExam, 
 const STORAGE_KEY = 'techcert:v1';
 
 const emptyState = {
-  user: null, // { id?, name, email, role }
+  user: null, // { id?, name, email, role, emailVerified? }
   progress: {}, // { [courseId]: { completed: [lessonId], lastLesson } }
   attempts: {}, // { [courseId]: [{ date, score, total, passed }] }
   certificates: [], // [{ credId, courseId, name, email, issuedAt, score, method }]
+  purchases: [], // cloud only: [{ courseId, status, date }]
 };
 
 function loadLocal() {
@@ -37,6 +52,8 @@ export function AppProvider({ children }) {
   const [state, setState] = useState(loadLocal);
   const [signInOpen, setSignInOpen] = useState(false);
   const [authReady, setAuthReady] = useState(MODE === 'local');
+  // true after opening a password-reset link: the sign-in modal asks for a new password
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   // local mode: persist to localStorage
   useEffect(() => {
@@ -57,6 +74,8 @@ export function AppProvider({ children }) {
         if (!cancelled) setState(emptyState);
       } else {
         try {
+          // a session opened from an emailed link proves the address (checked server-side)
+          await markEmailVerified();
           const account = await loadAccount(session.user);
           if (!cancelled) setState(s => ({ ...account, progress: mergeLastLesson(account.progress, s.progress) }));
         } catch (err) {
@@ -67,7 +86,11 @@ export function AppProvider({ children }) {
     };
     supabase.auth.getSession().then(({ data }) => sync(data.session));
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') sync(session);
+      if (event === 'PASSWORD_RECOVERY') {
+        setPasswordRecovery(true);
+        setSignInOpen(true);
+      }
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'PASSWORD_RECOVERY') sync(session);
     });
     return () => {
       cancelled = true;
@@ -75,12 +98,8 @@ export function AppProvider({ children }) {
     };
   }, []);
 
-  // Returns 'signed-in' (local) or 'link-sent' (cloud: magic link emailed).
+  // Local mode only: name + email, stored in this browser.
   const signIn = useCallback(async (name, email) => {
-    if (MODE === 'cloud') {
-      await sendMagicLink(name.trim(), email.trim().toLowerCase());
-      return 'link-sent';
-    }
     const staff = findStaff(email);
     const user = staff
       ? { name: staff.name, email: staff.email, role: staff.role }
@@ -88,6 +107,41 @@ export function AppProvider({ children }) {
     setState(s => ({ ...s, user }));
     setSignInOpen(false);
     return 'signed-in';
+  }, []);
+
+  // ---- cloud accounts (email + password). Each returns once the request succeeded;
+  // SIGNED_IN from onAuthStateChange loads the account.
+  const auth = useMemo(
+    () => ({
+      signUp: async (name, email, password) => {
+        const result = await signUpWithPassword(name.trim(), email.trim().toLowerCase(), password);
+        if (result === 'signed-in') setSignInOpen(false);
+        return result;
+      },
+      signInPassword: async (email, password) => {
+        await signInWithPassword(email.trim().toLowerCase(), password);
+        setSignInOpen(false);
+      },
+      sendSignInLink: email => sendMagicLink(email.trim().toLowerCase()),
+      resetPassword: email => sendPasswordReset(email.trim().toLowerCase()),
+      setNewPassword: async password => {
+        await updatePassword(password);
+        setPasswordRecovery(false);
+        setSignInOpen(false);
+      },
+    }),
+    [],
+  );
+
+  const sendVerification = useCallback(() => sendVerificationLink(state.user.email), [state.user]);
+
+  // Reload the account from the server (e.g. after a purchase completes).
+  const refreshAccount = useCallback(async () => {
+    if (MODE !== 'cloud') return;
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) return;
+    const account = await loadAccount(data.session.user);
+    setState(s => ({ ...account, progress: mergeLastLesson(account.progress, s.progress) }));
   }, []);
 
   const signOut = useCallback(async () => {
@@ -177,6 +231,10 @@ export function AppProvider({ children }) {
       certificates: mergeCerts(state.certificates),
       isAdmin: state.user?.role === 'admin',
       signIn,
+      ...auth,
+      sendVerification,
+      refreshAccount,
+      passwordRecovery,
       signOut,
       completeLesson,
       visitLesson,
@@ -186,7 +244,7 @@ export function AppProvider({ children }) {
       openSignIn: () => setSignInOpen(true),
       closeSignIn: () => setSignInOpen(false),
     }),
-    [state, authReady, signIn, signOut, completeLesson, visitLesson, resetCourse, recordAttempt, signInOpen],
+    [state, authReady, signIn, auth, sendVerification, refreshAccount, passwordRecovery, signOut, completeLesson, visitLesson, resetCourse, recordAttempt, signInOpen],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

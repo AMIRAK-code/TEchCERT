@@ -3,7 +3,8 @@ name: Deploy
 # Every push to main is checked, then deployed to Cloudflare (techcert.assist365.app).
 # Repository settings → Secrets and variables → Actions:
 #   secrets:   CLOUDFLARE_API_TOKEN (template "Edit Cloudflare Workers"), CLOUDFLARE_ACCOUNT_ID
-#   variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (public publishable key)
+#   variables (optional): VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY — default to the production
+#   project below; both values are public by design (row-level security protects the data).
 on:
   push:
     branches: [main]
@@ -23,18 +24,18 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Require Supabase settings (no local-mode build)
-        run: |
-          if [ -z "${{ vars.VITE_SUPABASE_URL }}" ] || [ -z "${{ vars.VITE_SUPABASE_ANON_KEY }}" ]; then
-            echo "::error::Set the VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY repository variables."; exit 1
-          fi
       - run: npm run lint
       - run: npm run test:db
       - name: Build
         run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || 'https://dtcovmttntdwihzxsuvl.supabase.co' }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || 'sb_publishable_eLcwcntuaHHUNzgat4Dy7Q_0V65CpIi' }}
+      - name: Require Cloudflare credentials
+        run: |
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ] || [ -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]; then
+            echo "::error::Add the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repository secrets."; exit 1
+          fi
       - name: Deploy to Cloudflare
         run: npx wrangler deploy
         env:

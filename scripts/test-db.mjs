@@ -12,10 +12,12 @@ const db = new PGlite();
 await db.exec(`
   create role anon nologin; create role authenticated nologin; create role service_role nologin;
   create schema auth;
-  create table auth.users (id uuid primary key default gen_random_uuid(), email text, raw_user_meta_data jsonb default '{}');
+  create table auth.users (id uuid primary key default gen_random_uuid(), email text, raw_user_meta_data jsonb default '{}', encrypted_password text);
   create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   grant usage on schema auth to anon, authenticated;
+  create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
   grant execute on function auth.uid() to anon, authenticated;
+  grant execute on function auth.jwt() to anon, authenticated;
 `);
 for (const f of fs.readdirSync(root).sort()) await db.exec(fs.readFileSync(root + f, 'utf8'));
 // Supabase grants table privileges to the API roles by default; RLS does the filtering.
@@ -24,8 +26,10 @@ await db.exec(`grant usage on schema public to anon, authenticated;
   grant all on all sequences in schema public to anon, authenticated;`);
 
 // Run SQL as a given role/user. Returns rows, or the error message string.
-const as = async (uid, role, sql, params) => {
-  await db.exec(`reset role; select set_config('request.jwt.claim.sub', '${uid || ''}', false); set role ${role};`);
+const as = async (uid, role, sql, params, claims = {}) => {
+  const jwt = JSON.stringify({ sub: uid, ...claims }).replace(/'/g, "''");
+  await db.exec(`reset role; select set_config('request.jwt.claim.sub', '${uid || ''}', false);
+    select set_config('request.jwt.claims', '${jwt}', false); set role ${role};`);
   try {
     return (await db.query(sql, params)).rows;
   } catch (e) {
@@ -136,6 +140,24 @@ check('refunded purchase does not earn the discount', price.price_cents === 499 
 for (let i = 0; i < 8; i++) await as(amir.id, L, `insert into lesson_progress (course_id, lesson_id) values ('ai-marketing', 'l${i}')`);
 r = (await as(amir.id, L, `select submit_exam('ai-marketing', 12, 15) r`))[0]?.r;
 check('admins take exams without purchasing', r?.passed === true, r);
+// --- email verification (password accounts verify later via an emailed link)
+const pw = { amr: [{ method: 'password', timestamp: 1 }] };
+const link = { amr: [{ method: 'otp', timestamp: 2 }] };
+const [carol] = (await db.query(`insert into auth.users (email, encrypted_password) values ('carol@example.com', '$2a$hash') returning id`)).rows;
+await db.exec(fs.readFileSync(root + '20261010000000_email_verification.sql', 'utf8'));
+r = (await db.query('select id, email_verified_at is not null v from profiles where id = any($1)', [[ada.id, carol.id]])).rows;
+check('backfill verifies link-only accounts, not password accounts', r.find(x => x.id === ada.id)?.v === true && r.find(x => x.id === carol.id)?.v === false, r);
+r = (await as(carol.id, L, 'select mark_email_verified() v', [], pw))[0];
+check('password sign-in does not verify the email', r?.v === false, r);
+r = await as(carol.id, L, `update profiles set email_verified_at = now() where id = '${carol.id}' returning id`, [], pw);
+check('learner cannot mark own email verified directly', Array.isArray(r) && r.length === 0, r);
+r = (await as(carol.id, L, 'select mark_email_verified() v', [], link))[0];
+check('emailed-link sign-in verifies the email', r?.v === true, r);
+r = (await as(carol.id, L, 'select mark_email_verified() v', [], pw))[0];
+check('verification sticks on later password sign-ins', r?.v === true, r);
+r = await as(null, 'anon', 'select mark_email_verified()');
+check('anonymous users cannot call mark_email_verified', isError(r, 'permission denied'), r);
+
 r = await db.exec(fs.readFileSync(root + '20261009000000_stripe_paywall.sql', 'utf8')).then(() => 'ok', e => e.message);
 check('paywall migration is idempotent', r === 'ok', r);
 
