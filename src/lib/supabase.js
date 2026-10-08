@@ -19,14 +19,16 @@ const toCert = row =>
   };
 
 export async function loadAccount(user) {
-  const [profile, progress, attempts, certs] = await Promise.all([
-    supabase.from('profiles').select('full_name, email, role').eq('id', user.id).single(),
+  const [profile, progress, attempts, certs, purchases] = await Promise.all([
+    supabase.from('profiles').select('full_name, email, role, email_verified_at').eq('id', user.id).single(),
     supabase.from('lesson_progress').select('course_id, lesson_id').eq('user_id', user.id),
     // explicit user filter: admins can read everyone's attempts under RLS
     supabase.from('exam_attempts').select('course_id, score, total, passed, created_at').eq('user_id', user.id).order('created_at'),
     supabase.from('certificates').select('*').eq('user_id', user.id),
+    // explicit user filter: admins can read everyone's purchases under RLS
+    supabase.from('purchases').select('course_id, status, created_at').eq('user_id', user.id),
   ]);
-  for (const r of [profile, progress, attempts, certs]) if (r.error) throw r.error;
+  for (const r of [profile, progress, attempts, certs, purchases]) if (r.error) throw r.error;
 
   const prog = {};
   for (const r of progress.data) (prog[r.course_id] ??= { completed: [] }).completed.push(r.lesson_id);
@@ -34,19 +36,59 @@ export async function loadAccount(user) {
   for (const r of attempts.data) (att[r.course_id] ??= []).push({ date: r.created_at, score: r.score, total: r.total, passed: r.passed });
 
   return {
-    user: { id: user.id, name: profile.data.full_name || user.email, email: profile.data.email, role: profile.data.role },
+    user: {
+      id: user.id,
+      name: profile.data.full_name || user.email,
+      email: profile.data.email,
+      role: profile.data.role,
+      emailVerified: !!profile.data.email_verified_at,
+    },
+    purchases: purchases.data.map(r => ({ courseId: r.course_id, status: r.status, date: r.created_at })),
     progress: prog,
     attempts: att,
     certificates: certs.data.map(toCert),
   };
 }
 
-export async function sendMagicLink(name, email) {
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { data: { full_name: name }, emailRedirectTo: window.location.origin + window.location.pathname },
-  });
+const here = () => window.location.origin + window.location.pathname;
+
+// Email + password accounts. Sign-up logs the user in straight away (Supabase "Confirm email"
+// must be off); the email is verified later, after a purchase, with sendVerificationLink().
+export async function signUpWithPassword(name, email, password) {
+  const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name }, emailRedirectTo: here() } });
   if (error) throw error;
+  // "Confirm email" still on in Supabase: no session until the link is opened.
+  return data.session ? 'signed-in' : 'confirm-sent';
+}
+
+export async function signInWithPassword(email, password) {
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(/invalid login/i.test(error.message) ? 'Wrong email or password.' : error.message);
+}
+
+// Emailed one-time sign-in link. Opening it also proves the user owns the address.
+export async function sendMagicLink(email, { createUser = false } = {}) {
+  const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: createUser, emailRedirectTo: here() } });
+  if (error) throw error;
+}
+
+export const sendVerificationLink = email => sendMagicLink(email);
+
+export async function sendPasswordReset(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/dashboard' });
+  if (error) throw error;
+}
+
+export async function updatePassword(password) {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+}
+
+// Records email ownership when this session came from an emailed link (checked server-side).
+export async function markEmailVerified() {
+  const { data, error } = await supabase.rpc('mark_email_verified');
+  if (error) console.error('markEmailVerified', error);
+  return !!data;
 }
 
 export async function saveLesson(courseId, lessonId) {

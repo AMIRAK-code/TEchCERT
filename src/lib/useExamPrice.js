@@ -21,6 +21,8 @@ export function useExamPrice(courseId, userId) {
   }, [courseId]);
 
   useEffect(() => {
+    // fetches from the server; state is set when the request resolves
+    // eslint-disable-next-line react/set-state-in-effect
     refresh();
   }, [refresh, userId]);
 

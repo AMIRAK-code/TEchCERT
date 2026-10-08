@@ -3,6 +3,7 @@ import { BadgeCheck, ClipboardList, PlayCircle } from 'lucide-react';
 import { courses, getCourse } from '../data/courses';
 import { useApp, useCourseProgress } from '../store/AppStore';
 import CourseIcon, { ProgressBar } from '../components/CourseIcon';
+import VerifyEmailNotice from '../components/VerifyEmailNotice';
 
 function CourseProgressRow({ course }) {
   const { attempts } = useApp();
@@ -57,6 +58,7 @@ export default function Dashboard() {
     <div className="container narrow">
       <h1>Welcome back, {user.name.split(' ')[0]}</h1>
       <p className="muted">{user.email}</p>
+      <VerifyEmailNotice />
 
       <h2 className="section-title">My certificates</h2>
       {mine.length === 0 ? (
