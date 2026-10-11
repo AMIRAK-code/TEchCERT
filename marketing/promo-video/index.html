@@ -1,0 +1,482 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>TechCert365 promo</title>
+<style>
+  @font-face { font-family: Plex; src: url(ibm-plex-sans-latin-400-normal.woff2); font-weight: 400; }
+  @font-face { font-family: Plex; src: url(ibm-plex-sans-latin-500-normal.woff2); font-weight: 500; }
+  @font-face { font-family: Plex; src: url(ibm-plex-sans-latin-600-normal.woff2); font-weight: 600; }
+  @font-face { font-family: Plex; src: url(ibm-plex-sans-latin-700-normal.woff2); font-weight: 700; }
+  @font-face { font-family: PlexMono; src: url(ibm-plex-mono-latin-400-normal.woff2); font-weight: 400; }
+  @font-face { font-family: PlexMono; src: url(ibm-plex-mono-latin-500-normal.woff2); font-weight: 500; }
+  @font-face { font-family: PlexMono; src: url(ibm-plex-mono-latin-600-normal.woff2); font-weight: 600; }
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+const W = 1920, H = 1080, DURATION = 45;
+const C = {
+  paper: '#f3f2ee', surface: '#fbfaf7', surface2: '#ebe9e3', ink: '#121211', ink2: '#45443f', ink3: '#7d7b73',
+  line: '#d6d3ca', line2: '#b9b5aa', accent: '#d9460c', accentSoft: '#fbe5da', ok: '#0b7a3e', okSoft: '#dfeee4',
+  term: '#161614', termInk: '#e4e2d9', termDim: '#6f6d66',
+};
+const SANS = 'Plex', MONO = 'PlexMono';
+const ctx = document.getElementById('c').getContext('2d');
+
+// ---------------------------------------------------------------- easing & timing
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const prog = (t, start, dur) => clamp((t - start) / dur);
+const easeOut = x => 1 - Math.pow(1 - x, 3);
+const easeIn = x => x * x * x;
+const easeInOut = x => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const easeBack = x => { const c1 = 1.7, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+// eased 0→1 over [start, start+dur]
+const ein = (t, start, dur, fn = easeOut) => fn(prog(t, start, dur));
+// 1 while inside a scene, fading in/out at the edges
+const env = (t, a, b, fi = 0.4, fo = 0.4) => Math.min(ein(t, a, fi), 1 - ein(t, b - fo, fo, easeIn));
+
+// ---------------------------------------------------------------- drawing helpers
+function font(size, weight = 500, family = SANS) { ctx.font = `${weight} ${size}px ${family}`; }
+function text(str, x, y, { size = 40, weight = 500, family = SANS, color = C.ink, align = 'left', alpha = 1, spacing = 0, baseline = 'alphabetic' } = {}) {
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  font(size, weight, family);
+  ctx.fillStyle = color;
+  ctx.textAlign = align;
+  ctx.textBaseline = baseline;
+  if (spacing) ctx.letterSpacing = `${spacing}px`;
+  ctx.fillText(str, x, y);
+  ctx.restore();
+}
+function measure(str, size, weight = 500, family = SANS, spacing = 0) {
+  ctx.save(); font(size, weight, family); if (spacing) ctx.letterSpacing = `${spacing}px`;
+  const w = ctx.measureText(str).width; ctx.restore(); return w;
+}
+function rect(x, y, w, h, color, alpha = 1) { ctx.save(); ctx.globalAlpha *= alpha; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.restore(); }
+function strokeRect(x, y, w, h, color, lw = 2, alpha = 1) { ctx.save(); ctx.globalAlpha *= alpha; ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.strokeRect(x, y, w, h); ctx.restore(); }
+function line(x1, y1, x2, y2, color, lw = 2, alpha = 1) { ctx.save(); ctx.globalAlpha *= alpha; ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore(); }
+// hard drop shadow card in the site's style
+function card(x, y, w, h, { fill = C.surface, border = C.ink, shadow = 10, alpha = 1, lw = 2 } = {}) {
+  ctx.save(); ctx.globalAlpha *= alpha;
+  if (shadow) { ctx.fillStyle = C.ink; ctx.fillRect(x + shadow, y + shadow, w, h); }
+  ctx.fillStyle = fill; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = border; ctx.lineWidth = lw; ctx.strokeRect(x, y, w, h);
+  ctx.restore();
+}
+function grid(alpha, color = 'rgba(18,18,17,0.06)', step = 48, offset = 0) {
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath();
+  for (let x = (offset % step); x <= W; x += step) { ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, H); }
+  for (let y = 0; y <= H; y += step) { ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); }
+  ctx.stroke(); ctx.restore();
+}
+function check(x, y, s, color, lw, p = 1) {
+  // animated check mark, p = draw progress
+  const pts = [[x - s * 0.5, y], [x - s * 0.15, y + s * 0.35], [x + s * 0.55, y - s * 0.4]];
+  const l1 = Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]);
+  const l2 = Math.hypot(pts[2][0] - pts[1][0], pts[2][1] - pts[1][1]);
+  const d = p * (l1 + l2);
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineCap = 'square'; ctx.lineJoin = 'miter';
+  ctx.beginPath(); ctx.moveTo(...pts[0]);
+  if (d <= l1) ctx.lineTo(lerp(pts[0][0], pts[1][0], d / l1), lerp(pts[0][1], pts[1][1], d / l1));
+  else { ctx.lineTo(...pts[1]); const r = (d - l1) / l2; ctx.lineTo(lerp(pts[1][0], pts[2][0], r), lerp(pts[1][1], pts[2][1], r)); }
+  ctx.stroke(); ctx.restore();
+}
+// Reveal text word by word (slide up + fade). Returns total width.
+function words(str, x, y, t, start, { stagger = 0.08, dur = 0.5, size = 80, weight = 600, color = C.ink, accent = {}, align = 'left', spacing = 0 } = {}) {
+  const parts = str.split(' ');
+  const space = measure(' ', size, weight);
+  const widths = parts.map(p => measure(p, size, weight, SANS, spacing));
+  const total = widths.reduce((a, b) => a + b, 0) + space * (parts.length - 1);
+  let cx = align === 'center' ? x - total / 2 : x;
+  parts.forEach((p, i) => {
+    const e = ein(t, start + i * stagger, dur);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(cx - 10, y - size * 1.1, widths[i] + 20, size * 1.45); ctx.clip();
+    text(p, cx, y + (1 - e) * size * 1.1, { size, weight, color: accent[i] || color, spacing });
+    ctx.restore();
+    cx += widths[i] + space;
+  });
+  return total;
+}
+function typeText(str, x, y, t, start, cps, opts) {
+  const n = Math.floor(clamp((t - start) * cps, 0, str.length));
+  text(str.slice(0, n), x, y, opts);
+  const caretOn = t >= start && (n < str.length || Math.floor(t * 2) % 2 === 0) && t < start + str.length / cps + 1.2;
+  if (caretOn) {
+    const w = measure(str.slice(0, n), opts.size, opts.weight, opts.family, opts.spacing || 0);
+    rect(x + w + 4, y - opts.size * 0.8, opts.size * 0.5, opts.size * 0.95, opts.caret || C.accent, opts.alpha ?? 1);
+  }
+}
+
+// ---------------------------------------------------------------- brand
+const BRAND = 'TechCert', BRAND_NUM = '365', MAKER = 'by Assist365 Apps', URL = 'techcert.assist365.app';
+function logoMark(cx, cy, s, { fill = C.ink, fg = C.paper, alpha = 1, rot = 0 } = {}) {
+  if (!(s > 1)) return;
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.translate(cx, cy); ctx.rotate(rot);
+  ctx.fillStyle = fill; ctx.fillRect(-s / 2, -s / 2, s, s);
+  // award: circle + two ribbon tails
+  ctx.strokeStyle = fg; ctx.lineWidth = s * 0.075; ctx.lineJoin = 'miter';
+  ctx.beginPath(); ctx.arc(0, -s * 0.08, s * 0.2, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.13, s * 0.08); ctx.lineTo(-s * 0.18, s * 0.33); ctx.lineTo(0, s * 0.24); ctx.lineTo(s * 0.18, s * 0.33); ctx.lineTo(s * 0.13, s * 0.08);
+  ctx.stroke();
+  ctx.restore();
+}
+function wordmark(x, y, size, { color = C.ink, accent = C.accent, alpha = 1, reveal = 1 } = {}) {
+  const full = BRAND + BRAND_NUM;
+  const n = Math.round(full.length * reveal);
+  const a = full.slice(0, Math.min(n, BRAND.length));
+  const b = n > BRAND.length ? full.slice(BRAND.length, n) : '';
+  text(a, x, y, { size, weight: 700, color, alpha, spacing: -size * 0.02 });
+  const wa = measure(BRAND, size, 700, SANS, -size * 0.02);
+  if (b) text(b, x + wa, y, { size, weight: 700, color: accent, alpha, spacing: -size * 0.02 });
+  return measure(full, size, 700, SANS, -size * 0.02);
+}
+
+// ---------------------------------------------------------------- course icons (line art)
+function icon(kind, cx, cy, s, color, lw = 5) {
+  ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw; ctx.lineCap = 'square'; ctx.lineJoin = 'miter';
+  if (kind === 'prompt') { // terminal prompt
+    ctx.strokeRect(cx - s / 2, cy - s * 0.38, s, s * 0.76);
+    ctx.beginPath(); ctx.moveTo(cx - s * 0.3, cy - s * 0.12); ctx.lineTo(cx - s * 0.12, cy + s * 0.02); ctx.lineTo(cx - s * 0.3, cy + s * 0.16); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - s * 0.02, cy + s * 0.18); ctx.lineTo(cx + s * 0.28, cy + s * 0.18); ctx.stroke();
+  } else if (kind === 'shield') {
+    ctx.beginPath(); ctx.moveTo(cx, cy - s * 0.45); ctx.lineTo(cx + s * 0.38, cy - s * 0.3); ctx.lineTo(cx + s * 0.34, cy + s * 0.08);
+    ctx.quadraticCurveTo(cx + s * 0.22, cy + s * 0.36, cx, cy + s * 0.47); ctx.quadraticCurveTo(cx - s * 0.22, cy + s * 0.36, cx - s * 0.34, cy + s * 0.08);
+    ctx.lineTo(cx - s * 0.38, cy - s * 0.3); ctx.closePath(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx, cy - s * 0.2); ctx.lineTo(cx, cy + s * 0.08); ctx.stroke();
+    ctx.fillRect(cx - lw / 2, cy + s * 0.17, lw, lw);
+  } else if (kind === 'megaphone') {
+    ctx.beginPath(); ctx.moveTo(cx - s * 0.38, cy - s * 0.12); ctx.lineTo(cx + s * 0.22, cy - s * 0.38); ctx.lineTo(cx + s * 0.22, cy + s * 0.38); ctx.lineTo(cx - s * 0.38, cy + s * 0.12); ctx.closePath(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - s * 0.24, cy + s * 0.14); ctx.lineTo(cx - s * 0.16, cy + s * 0.42); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + s * 0.36, cy - s * 0.16); ctx.lineTo(cx + s * 0.48, cy - s * 0.24); ctx.moveTo(cx + s * 0.38, cy + s * 0.02); ctx.lineTo(cx + s * 0.52, cy + s * 0.02); ctx.stroke();
+  } else if (kind === 'search') {
+    ctx.beginPath(); ctx.arc(cx - s * 0.08, cy - s * 0.08, s * 0.3, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + s * 0.14, cy + s * 0.14); ctx.lineTo(cx + s * 0.42, cy + s * 0.42); ctx.stroke();
+    ctx.restore(); check(cx - s * 0.1, cy - s * 0.08, s * 0.3, color, lw * 0.8); return;
+  }
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------- scenes
+// 0–5 s · intro
+function sIntro(t) {
+  const a = 1 - ein(t, 4.4, 0.6, easeIn);
+  rect(0, 0, W, H, C.paper);
+  grid(ein(t, 0, 1) * a);
+  // crosshair lines draw in
+  const lp = ein(t, 0.1, 1.1, easeInOut);
+  line(0, 540, W * lp, 540, C.line2, 1.5, a);
+  line(960, 0, 960, H * lp, C.line2, 1.5, a);
+  // corner registration marks
+  [[120, 120], [W - 120, 120], [120, H - 120], [W - 120, H - 120]].forEach(([x, y], i) => {
+    const e = ein(t, 0.3 + i * 0.08, 0.5);
+    line(x - 24 * e, y, x + 24 * e, y, C.ink, 2, a); line(x, y - 24 * e, x, y + 24 * e, C.ink, 2, a);
+  });
+  text('CERT. PLATFORM — REV. 2026', 150, 160, { size: 20, family: MONO, color: C.ink3, alpha: ein(t, 0.6, 0.6) * a, spacing: 3 });
+  text('DOC. TC-365 / 001', W - 150, 160, { size: 20, family: MONO, color: C.ink3, align: 'right', alpha: ein(t, 0.7, 0.6) * a, spacing: 3 });
+
+  const up = ein(t, 4.2, 0.8, easeIn) * 80;
+  const m = easeBack(prog(t, 0.6, 0.7));
+  // logo box with label plate behind
+  const size = 150;
+  const wmSize = 150;
+  const wmW = measure(BRAND + BRAND_NUM, wmSize, 700, SANS, -wmSize * 0.02);
+  const groupW = size + 50 + wmW;
+  const gx = 960 - groupW / 2;
+  const cy = 520 - up;
+  rect(gx - 40, cy - 115, groupW + 80, 400, C.paper, a); // knock out crosshair behind the lockup + tagline
+  ctx.save(); ctx.beginPath(); ctx.rect(gx - 40, cy - 115, groupW + 80, 400); ctx.clip(); grid(ein(t, 0, 1) * a); ctx.restore();
+  logoMark(gx + size / 2, cy, size * m, { alpha: a, rot: (1 - m) * -0.4 });
+  const reveal = prog(t, 1.1, 1.0);
+  ctx.save(); ctx.beginPath(); ctx.rect(gx + size + 40, cy - 120, wmW + 30, 240); ctx.clip();
+  wordmark(gx + size + 50, cy + 52, wmSize, { alpha: a, reveal: reveal > 0 ? 1 : 0, }); // full word, wiped by clip below
+  ctx.restore();
+  // wipe cover that slides off the wordmark
+  const wipe = ein(t, 1.1, 0.9, easeInOut);
+  rect(gx + size + 40 + (wmW + 30) * wipe, cy - 120, (wmW + 30) * (1 - wipe), 240, C.paper, a);
+  if (wipe > 0 && wipe < 1) rect(gx + size + 40 + (wmW + 30) * wipe - 8, cy - 100, 8, 200, C.accent, a);
+  // accent rule + maker line
+  const r = ein(t, 2.1, 0.7, easeInOut);
+  rect(gx, cy + 110, groupW * r, 6, C.accent, a);
+  text(MAKER.toUpperCase(), 960, cy + 185, { size: 30, weight: 500, family: MONO, color: C.ink2, align: 'center', alpha: ein(t, 2.5, 0.6) * a, spacing: 8 });
+  text('Verified AI skills. Verifiable certificates.', 960, cy + 250, { size: 34, weight: 400, color: C.ink3, align: 'center', alpha: ein(t, 2.9, 0.6) * a });
+}
+
+// 5–10 s · hook
+function sHook(t) {
+  rect(0, 0, W, H, C.paper);
+  grid(1);
+  const a = 1 - ein(t, 9.5, 0.5, easeIn);
+  ctx.save(); ctx.globalAlpha = a;
+  text('// THE SHIFT', 200, 300, { size: 26, family: MONO, color: C.accent, alpha: ein(t, 5.1, 0.4), spacing: 4 });
+  words('AI is rewriting every job.', 200, 450, t, 5.3, { size: 120, weight: 700 });
+  words('Can you prove you’re ready?', 200, 620, t, 6.9, { size: 120, weight: 700, accent: { 2: C.accent } });
+  // underline the accent word
+  const pw = measure('Can you ', 120, 700);
+  const w2 = measure('prove', 120, 700);
+  rect(200 + pw, 650, w2 * ein(t, 7.7, 0.5, easeInOut), 10, C.accent);
+  text('Courses, labs and exams built for the way AI is used at work.', 204, 760, { size: 38, weight: 400, color: C.ink2, alpha: ein(t, 8.2, 0.6) });
+  ctx.restore();
+  // ink wipe to next scene
+  const wp = ein(t, 9.55, 0.45, easeInOut);
+  if (wp > 0) rect(0, H * (1 - wp), W, H * wp, C.ink);
+}
+
+const COURSES = [
+  { n: '01', icon: 'prompt', title: ['AI Prompt', 'Engineer'], spec: 'Beginner · 3 h' },
+  { n: '02', icon: 'shield', title: ['AI Security', 'Professional'], spec: 'Intermediate · 4 h' },
+  { n: '03', icon: 'megaphone', title: ['AI Marketing', 'Specialist'], spec: 'Intermediate · 4 h' },
+  { n: '04', icon: 'search', title: ['AI SEO & GEO', 'Specialist'], spec: 'Intermediate · 4 h' },
+];
+
+// 10–20 s · courses
+function sCourses(t) {
+  // ink wipe reveals paper again from the top
+  rect(0, 0, W, H, C.paper);
+  grid(1);
+  const a = 1 - ein(t, 19.5, 0.5, easeIn);
+  ctx.save(); ctx.globalAlpha = a;
+  text('// 01 — CERTIFICATION TRACKS', 160, 170, { size: 26, family: MONO, color: C.accent, alpha: ein(t, 10.4, 0.4), spacing: 4 });
+  words('Four tracks. One standard.', 160, 270, t, 10.5, { size: 84, weight: 700 });
+
+  const cw = 370, ch = 470, gap = 40, x0 = (W - (cw * 4 + gap * 3)) / 2, y0 = 380;
+  COURSES.forEach((c, i) => {
+    const e = ein(t, 11.3 + i * 0.22, 0.7, easeBack);
+    const x = x0 + i * (cw + gap), y = y0 + (1 - e) * 140;
+    const alpha = clamp(e * 1.4);
+    // spotlight sequence
+    const focusStart = 13.6 + i * 1.3;
+    const f = env(t, focusStart, focusStart + 1.3, 0.25, 0.3);
+    const lift = f * 14;
+    card(x, y - lift, cw, ch, { alpha, shadow: 10 + lift, fill: f > 0.5 ? C.surface : C.surface });
+    rect(x, y - lift, cw, 10, C.accent, alpha * (0.25 + 0.75 * f));
+    text(c.n, x + 32, y - lift + 70, { size: 26, family: MONO, weight: 600, color: C.ink3, alpha });
+    text('8 LESSONS', x + cw - 32, y - lift + 70, { size: 20, family: MONO, color: C.ink3, align: 'right', alpha, spacing: 2 });
+    // icon tile
+    rect(x + 32, y - lift + 110, 110, 110, f > 0.01 ? C.ink : C.surface2, alpha);
+    ctx.save(); ctx.globalAlpha = alpha * a;
+    icon(c.icon, x + 87, y - lift + 165, 64, f > 0.01 ? C.paper : C.ink, 5);
+    ctx.restore();
+    text(c.title[0], x + 32, y - lift + 300, { size: 46, weight: 700, alpha });
+    text(c.title[1], x + 32, y - lift + 356, { size: 46, weight: 700, alpha });
+    line(x + 32, y - lift + 395, x + cw - 32, y - lift + 395, C.line, 2, alpha);
+    text(c.spec.toUpperCase(), x + 32, y - lift + 438, { size: 20, family: MONO, color: C.ink2, alpha, spacing: 2 });
+  });
+  text('Interactive lessons · hands-on labs · scenario drills', 960, 960, { size: 32, color: C.ink2, align: 'center', alpha: ein(t, 13.0, 0.6), weight: 400 });
+  ctx.restore();
+  if (t < 10.6) { const wp = 1 - ein(t, 10.0, 0.6, easeInOut); rect(0, 0, W, H * wp, C.ink); }
+}
+
+// 20–31 s · how it works
+function sHow(t) {
+  rect(0, 0, W, H, C.term);
+  grid(1, 'rgba(228,226,217,0.05)');
+  const a = 1 - ein(t, 30.5, 0.5, easeIn);
+  ctx.save(); ctx.globalAlpha = a;
+  text('// 02 — HOW IT WORKS', 160, 170, { size: 26, family: MONO, color: C.accent, alpha: ein(t, 20.2, 0.4), spacing: 4 });
+  words('Learn. Prove it. Get certified.', 160, 270, t, 20.3, { size: 84, weight: 700, color: C.termInk, accent: { 1: C.accent, 2: C.accent } });
+
+  const pw = 500, ph = 560, gap = 50, x0 = (W - (pw * 3 + gap * 2)) / 2, y0 = 360;
+  const steps = [
+    { n: '01', label: 'LEARN', t0: 20.9, focus: [21.4, 24.4] },
+    { n: '02', label: 'PROVE', t0: 21.1, focus: [24.4, 27.6] },
+    { n: '03', label: 'CERTIFY', t0: 21.3, focus: [27.6, 31] },
+  ];
+  steps.forEach((s, i) => {
+    const e = ein(t, s.t0, 0.6);
+    const x = x0 + i * (pw + gap), y = y0 + (1 - e) * 60;
+    const f = env(t, s.focus[0], s.focus[1], 0.3, 0.3);
+    const dim = 0.45 + 0.55 * Math.max(f, t > s.focus[1] ? 0.7 : 0);
+    ctx.save(); ctx.globalAlpha = a * e * dim;
+    rect(x, y, pw, ph, '#1f1f1c');
+    strokeRect(x, y, pw, ph, f > 0.5 ? C.accent : '#3a3934', 2);
+    text(s.n, x + 36, y + 64, { size: 26, family: MONO, weight: 600, color: C.accent });
+    text(s.label, x + 96, y + 64, { size: 26, family: MONO, weight: 600, color: C.termInk, spacing: 4 });
+    line(x + 36, y + 94, x + pw - 36, y + 94, '#3a3934', 2);
+    ctx.restore();
+    ctx.save(); ctx.globalAlpha = a * e * dim;
+    if (i === 0) stepLearn(t, x, y, pw);
+    if (i === 1) stepProve(t, x, y, pw);
+    if (i === 2) stepCertify(t, x, y, pw);
+    ctx.restore();
+  });
+  ctx.restore();
+}
+function stepLearn(t, x, y, w) {
+  const lessons = ['AI across the funnel', 'Brand voice & briefs', 'Content at scale', 'Testing AI variants'];
+  lessons.forEach((l, i) => {
+    const done = ein(t, 21.8 + i * 0.5, 0.35);
+    const yy = y + 160 + i * 66;
+    strokeRect(x + 36, yy - 26, 36, 36, done > 0 ? C.ok : '#5a5952', 2);
+    if (done > 0) { rect(x + 36, yy - 26, 36, 36, C.ok, done); check(x + 54, yy - 8, 22, C.paper, 4, done); }
+    text(l, x + 92, yy, { size: 28, weight: 500, color: C.termInk });
+  });
+  const p = ein(t, 21.8, 2.2, easeInOut);
+  text('PROGRESS', x + 36, y + 470, { size: 20, family: MONO, color: C.termDim, spacing: 3 });
+  text(`${Math.round(p * 8)}/8 LESSONS`, x + w - 36, y + 470, { size: 20, family: MONO, color: C.termInk, align: 'right', spacing: 2 });
+  rect(x + 36, y + 490, w - 72, 16, '#34332e');
+  rect(x + 36, y + 490, (w - 72) * p, 16, C.accent);
+}
+function stepProve(t, x, y, w) {
+  text('Q 07 / 15', x + 36, y + 150, { size: 22, family: MONO, color: C.termDim, spacing: 2 });
+  const secs = Math.max(0, 25 * 60 - Math.floor(clamp(t - 24.4, 0, 6) * 37));
+  const mm = String(Math.floor(secs / 60)).padStart(2, '0'), ss = String(secs % 60).padStart(2, '0');
+  text(`⏱ ${mm}:${ss}`, x + w - 36, y + 150, { size: 22, family: MONO, color: C.termInk, align: 'right' });
+  text('Best defence against prompt', x + 36, y + 205, { size: 30, weight: 600, color: C.termInk });
+  text('injection in a support bot?', x + 36, y + 245, { size: 30, weight: 600, color: C.termInk });
+  const opts = ['A  Longer system prompt', 'B  Least-privilege tools + checks', 'C  Higher temperature'];
+  const pick = ein(t, 25.6, 0.3);
+  opts.forEach((o, i) => {
+    const yy = y + 290 + i * 70;
+    const sel = i === 1 && pick > 0;
+    rect(x + 36, yy, w - 72, 54, sel ? C.ok : '#262622', sel ? 0.25 + 0.75 * pick : 1);
+    strokeRect(x + 36, yy, w - 72, 54, sel ? C.ok : '#3a3934', 2);
+    text(o, x + 56, yy + 36, { size: 24, weight: 500, color: sel ? C.paper : C.termInk });
+  });
+  // score readout
+  const sp = ein(t, 26.2, 1.0, easeInOut);
+  text('SCORE', x + 36, y + 520, { size: 20, family: MONO, color: C.termDim, spacing: 3 });
+  text(`${Math.round(sp * 87)}%`, x + 140, y + 522, { size: 36, family: MONO, weight: 600, color: sp > 0.8 ? C.accent : C.termInk });
+  text('PASS ≥ 70%', x + w - 36, y + 520, { size: 20, family: MONO, color: C.termDim, align: 'right', spacing: 2 });
+}
+function stepCertify(t, x, y, w) {
+  const e = ein(t, 27.9, 0.6, easeBack);
+  const cx = x + w / 2, cy = y + 300;
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(e, e);
+  rect(-150, -150, 300, 300, C.accent);
+  logoMark(0, 0, 210, { fill: C.accent, fg: C.paper });
+  ctx.restore();
+  text('CERTIFIED', cx, y + 510, { size: 30, family: MONO, weight: 600, color: C.termInk, align: 'center', alpha: ein(t, 28.4, 0.4), spacing: 8 });
+}
+
+// 31–38 s · certificate + verification
+function sCert(t) {
+  rect(0, 0, W, H, C.paper);
+  grid(1);
+  const a = 1 - ein(t, 37.5, 0.5, easeIn);
+  ctx.save(); ctx.globalAlpha = a;
+  const e = ein(t, 31.1, 0.8, easeOut);
+  const cw = 1040, ch = 700, cx = 120 + (1 - e) * -80, cy = 190;
+  card(cx, cy, cw, ch, { shadow: 16, alpha: e });
+  ctx.save(); ctx.globalAlpha *= e;
+  strokeRect(cx + 26, cy + 26, cw - 52, ch - 52, C.line2, 2);
+  logoMark(cx + 110, cy + 110, 70);
+  wordmark(cx + 165, cy + 128, 44);
+  text('CERTIFICATE OF ACHIEVEMENT', cx + cw - 80, cy + 122, { size: 22, family: MONO, color: C.ink3, align: 'right', spacing: 4 });
+  text('This certifies that', cx + 80, cy + 250, { size: 30, weight: 400, color: C.ink2 });
+  typeText('Ada Lovelace', cx + 80, cy + 345, t, 31.7, 18, { size: 78, weight: 700, color: C.ink, caret: C.accent });
+  text('has passed the certification exam for', cx + 80, cy + 415, { size: 30, weight: 400, color: C.ink2, alpha: ein(t, 32.6, 0.5) });
+  text('AI Prompt Engineer', cx + 80, cy + 485, { size: 52, weight: 700, color: C.accent, alpha: ein(t, 32.8, 0.5) });
+  line(cx + 80, cy + 560, cx + cw - 80, cy + 560, C.line, 2);
+  text('CREDENTIAL ID', cx + 80, cy + 610, { size: 20, family: MONO, color: C.ink3, spacing: 3 });
+  typeText('TC-7KQM-4XPA', cx + 80, cy + 652, t, 33.2, 14, { size: 36, family: MONO, weight: 600, color: C.ink });
+  text('SCORE 87% · ISSUED 2026', cx + cw - 80, cy + 652, { size: 24, family: MONO, color: C.ink2, align: 'right', alpha: ein(t, 33.6, 0.5), spacing: 2 });
+  ctx.restore();
+
+  // verification panel
+  const v = ein(t, 34.3, 0.6);
+  const vx = 1260, vy = 260, vw = 520;
+  ctx.save(); ctx.globalAlpha *= v;
+  card(vx + (1 - v) * 60, vy, vw, 300, { shadow: 10 });
+  const px = vx + (1 - v) * 60;
+  text('VERIFY', px + 32, vy + 60, { size: 22, family: MONO, color: C.ink3, spacing: 4 });
+  rect(px + 32, vy + 85, vw - 64, 64, C.surface2);
+  strokeRect(px + 32, vy + 85, vw - 64, 64, C.ink, 2);
+  typeText('TC-7KQM-4XPA', px + 52, vy + 128, t, 34.7, 16, { size: 28, family: MONO, weight: 500, color: C.ink });
+  const ok = ein(t, 35.7, 0.5, easeBack);
+  if (ok > 0) {
+    rect(px + 32, vy + 175, vw - 64, 90, C.okSoft, Math.min(1, ok));
+    strokeRect(px + 32, vy + 175, vw - 64, 90, C.ok, 2, Math.min(1, ok));
+    rect(px + 54, vy + 197, 46, 46, C.ok, Math.min(1, ok));
+    check(px + 77, vy + 221, 28, C.paper, 5, ein(t, 35.9, 0.4));
+    text('Valid certificate', px + 120, vy + 230, { size: 30, weight: 600, color: C.ok, alpha: Math.min(1, ok) });
+  }
+  ctx.restore();
+  text('Every certificate has a public ID.', 1260, 680, { size: 36, weight: 700, alpha: ein(t, 35.2, 0.5) });
+  text('Employers can check it in seconds.', 1260, 732, { size: 36, weight: 700, color: C.accent, alpha: ein(t, 35.5, 0.5) });
+  text(URL + '/verify', 1260, 796, { size: 24, family: MONO, color: C.ink2, alpha: ein(t, 35.8, 0.5) });
+  // stamp
+  const st = prog(t, 36.0, 0.35);
+  if (st > 0) {
+    ctx.save(); ctx.translate(cx + cw - 200, cy + 330); ctx.rotate(-0.18);
+    const sc = lerp(2.2, 1, easeOut(st)); ctx.scale(sc, sc); ctx.globalAlpha *= Math.min(1, st * 2) * 0.9;
+    ctx.strokeStyle = C.ok; ctx.lineWidth = 6; ctx.strokeRect(-150, -55, 300, 110);
+    ctx.strokeRect(-140, -45, 280, 90);
+    text('VERIFIED', 0, 18, { size: 50, family: MONO, weight: 600, color: C.ok, align: 'center', spacing: 6 });
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+// 38–45 s · call to action
+function sCTA(t) {
+  rect(0, 0, W, H, C.ink);
+  grid(1, 'rgba(228,226,217,0.05)');
+  const fadeIn = ein(t, 38.0, 0.5);
+  ctx.save(); ctx.globalAlpha = fadeIn;
+  const out = ein(t, 41.0, 0.5, easeIn);
+  ctx.save(); ctx.globalAlpha *= 1 - out;
+  words('Lessons are free.', 960, 470, t, 38.3, { size: 120, weight: 700, color: C.termInk, align: 'center' });
+  words('Certificates from €1.99.', 960, 630, t, 39.2, { size: 120, weight: 700, color: C.termInk, align: 'center', accent: { 2: C.accent } });
+  ctx.restore();
+
+  // end card
+  const ec = ein(t, 41.4, 0.7, easeBack);
+  if (t > 41.2) {
+    const size = 130, wm = 130;
+    const wmW = measure(BRAND + BRAND_NUM, wm, 700, SANS, -wm * 0.02);
+    const gw = size + 46 + wmW, gx = 960 - gw / 2, cy = 430;
+    ctx.save(); ctx.globalAlpha *= clamp(ec);
+    logoMark(gx + size / 2, cy, size * ec, { fill: C.accent, fg: C.ink });
+    wordmark(gx + size + 46, cy + 46, wm, { color: C.termInk, accent: C.accent });
+    ctx.restore();
+    text(MAKER.toUpperCase(), 960, cy + 140, { size: 28, family: MONO, color: C.termDim, align: 'center', spacing: 8, alpha: ein(t, 41.9, 0.5) });
+    // URL button
+    const b = ein(t, 42.4, 0.6, easeBack);
+    const bw = 860, bh = 110, bx = 960 - bw / 2, by = cy + 220 + (1 - b) * 40;
+    ctx.save(); ctx.globalAlpha *= clamp(b);
+    rect(bx + 10, by + 10, bw, bh, C.accent);
+    rect(bx, by, bw, bh, C.paper);
+    strokeRect(bx, by, bw, bh, C.paper, 2);
+    text('Start learning → ' + URL, 960, by + 70, { size: 40, weight: 600, color: C.ink, align: 'center' });
+    ctx.restore();
+  }
+  ctx.restore();
+  // final fade to black
+  const end = ein(t, 44.4, 0.6, easeIn);
+  if (end > 0) rect(0, 0, W, H, '#000', end);
+}
+
+// ---------------------------------------------------------------- timeline
+function render(t) {
+  ctx.clearRect(0, 0, W, H);
+  ctx.globalAlpha = 1;
+  if (t < 5) sIntro(t);
+  else if (t < 10) sHook(t);
+  else if (t < 20) sCourses(t);
+  else if (t < 31) sHow(t);
+  else if (t < 38) sCert(t);
+  else sCTA(t);
+  // persistent frame chrome: thin progress rule + corner label (not on intro/CTA end)
+  const dark = (t >= 20 && t < 31) || t >= 38;
+  if (t > 5 && t < 44.4) {
+    rect(0, H - 6, W * (t / DURATION), 6, C.accent);
+    text(`${BRAND}${BRAND_NUM}`, 60, H - 40, { size: 22, weight: 700, color: dark ? C.termInk : C.ink, alpha: 0.85 });
+    text(URL, W - 60, H - 40, { size: 20, family: MONO, color: dark ? C.termDim : C.ink3, align: 'right' });
+  }
+}
+window.render = render;
+window.ready = document.fonts.ready.then(() => Promise.all(['500 10px Plex', '700 10px Plex', '400 10px Plex', '600 10px Plex', '500 10px PlexMono', '600 10px PlexMono', '400 10px PlexMono'].map(f => document.fonts.load(f))));
+// preview mode: open the file in a browser to watch it play
+if (!/render=1/.test(location.search)) {
+  window.ready.then(() => { const t0 = performance.now(); const loop = () => { render(((performance.now() - t0) / 1000) % DURATION); requestAnimationFrame(loop); }; loop(); });
+}
+</script>
+</body>
+</html>
