@@ -83,7 +83,7 @@ Magic links fail on the live domain until this is set.
 
 **Done when:** signing in on the live site with a real email lands you back on techcert.assist365.app, signed in.
 
-#### T2 · Custom SMTP for sign-in emails — *Amir* (Brevo)
+#### T2 · Custom SMTP for sign-in emails — *Amir* (Brevo) — **DONE 14 Oct 2026** (domain `assist365.app` authenticated in Brevo: DKIM `brevo1/brevo2._domainkey` CNAMEs, `brevo-code` TXT, `_dmarc` TXT `p=none`; sender `techCert <no-reply@assist365.app>`; Supabase SMTP = Brevo relay, rate limit 100/h. Brevo free plan: 300 emails/day)
 Supabase's built-in sender allows only a few emails per hour. Use Brevo (account "assist365", free plan: 300 emails/day; SMTP relay already enabled).
 1. **Authenticate a sending domain in Brevo** — Brevo → Senders, Domains & Dedicated IPs → Domains → Add `assist365.app` → add the TXT/DKIM/DMARC records it shows in Cloudflare DNS (records only; don't touch the apex site). Then add sender `no-reply@assist365.app`, name "techCert". Don't send from the Gmail sender: mail from @gmail.com through Brevo fails Gmail's DMARC checks and lands in spam or bounces.
 2. **Brevo SMTP key** — Brevo → SMTP & API → SMTP → Generate a new SMTP key.
