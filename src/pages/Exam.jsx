@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
-import { Award, BadgeCheck, Check, ClipboardList, CreditCard, Lock, RotateCcw, Timer, X } from 'lucide-react';
+import { Award, BadgeCheck, Check, ClipboardList, Lock, RotateCcw, Timer, X } from 'lucide-react';
 import { getCourse } from '../data/courses';
 import { useApp, useCourseProgress } from '../store/AppStore';
 import { shuffle } from '../lib/shuffle';
 import { Rich } from '../lib/RichText';
 import { useExamPrice } from '../lib/useExamPrice';
-import { formatPrice, startCheckout } from '../lib/supabase';
+import { formatPrice, priceNote, wasPrice } from '../lib/supabase';
 import VerifyEmailNotice from '../components/VerifyEmailNotice';
+import BuyCertificateButton from '../components/BuyCertificateButton';
 
 function drawExam(course) {
   return shuffle(course.examQuestions)
@@ -42,8 +43,6 @@ function ExamFlow({ course }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const checkout = searchParams.get('checkout'); // success | cancel (back from Stripe)
   const [confirming, setConfirming] = useState(false);
-  const [buying, setBuying] = useState(false);
-  const [buyError, setBuyError] = useState('');
 
   // Back from Stripe: the webhook records the purchase within seconds; poll until access shows up.
   useEffect(() => {
@@ -68,17 +67,6 @@ function ExamFlow({ course }) {
       cancelled = true;
     };
   }, [checkout, user, refreshPrice, refreshAccount, setSearchParams]);
-
-  const buy = async () => {
-    setBuying(true);
-    setBuyError('');
-    try {
-      await startCheckout(course.id);
-    } catch (err) {
-      setBuyError(err.message);
-      setBuying(false);
-    }
-  };
 
   const start = () => {
     setQuestions(drawExam(course));
@@ -139,6 +127,17 @@ function ExamFlow({ course }) {
 
         {locked ? (
           <>
+            {confirming ? (
+              <p className="muted">Confirming your payment…</p>
+            ) : (
+              price?.has_access && (
+                <div className="feedback good">
+                  <BadgeCheck size={18} />
+                  <div>Your exam & certificate are paid for. The exam opens once you finish the lessons.</div>
+                </div>
+              )
+            )}
+            {checkout === 'cancel' && <p className="muted small">Checkout was cancelled — you have not been charged.</p>}
             <div className="feedback bad">
               <Lock size={18} />
               <div>
@@ -170,20 +169,12 @@ function ExamFlow({ course }) {
           <>
             {checkout === 'cancel' && <p className="muted small">Checkout was cancelled — you have not been charged.</p>}
             <div className="price-tag">
-              {price.discounted && <s className="muted">{formatPrice(price.base_cents, price.currency)}</s>}
+              {wasPrice(price) && <s className="muted">{formatPrice(wasPrice(price), price.currency)}</s>}
               <strong>{formatPrice(price.price_cents, price.currency)}</strong>
-              <span className="muted small">{price.discounted ? 'returning-learner price, 20% off · ' : ''}incl. VAT · one-time</span>
+              <span className="muted small">{priceNote(price) ? `${priceNote(price)} · ` : ''}incl. VAT · one-time</span>
             </div>
             <p className="muted small">Unlocks the exam and your verifiable certificate. Retakes are included.</p>
-            <button className="btn-primary" onClick={buy} disabled={buying}>
-              <CreditCard size={18} /> {buying ? 'Opening checkout…' : 'Buy exam & certificate'}
-            </button>
-            {buyError && (
-              <div className="feedback bad">
-                <X size={18} />
-                <div>{buyError}</div>
-              </div>
-            )}
+            <BuyCertificateButton courseId={course.id} price={price} />
           </>
         ) : priceError ? (
           <div className="feedback bad">

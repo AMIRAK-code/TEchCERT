@@ -4,7 +4,8 @@ import { activityCount, getCourse, totalMinutes } from '../data/courses';
 import { useApp, useCourseProgress } from '../store/AppStore';
 import CourseIcon, { ProgressBar } from '../components/CourseIcon';
 import { useExamPrice } from '../lib/useExamPrice';
-import { formatPrice } from '../lib/supabase';
+import { formatPrice, wasPrice } from '../lib/supabase';
+import BuyCertificateButton from '../components/BuyCertificateButton';
 
 export default function Course() {
   const { id } = useParams();
@@ -61,9 +62,9 @@ function CourseView({ course, user, certificates, attempts, resetCourse }) {
               <dd>
                 {price.has_access ? (
                   'Unlocked'
-                ) : price.discounted ? (
+                ) : wasPrice(price) ? (
                   <>
-                    <s className="muted">{formatPrice(price.base_cents, price.currency)}</s> {formatPrice(price.price_cents, price.currency)}
+                    <s className="muted">{formatPrice(wasPrice(price), price.currency)}</s> {formatPrice(price.price_cents, price.currency)}
                   </>
                 ) : (
                   formatPrice(price.price_cents, price.currency)
@@ -88,6 +89,7 @@ function CourseView({ course, user, certificates, attempts, resetCourse }) {
               {p.finished ? <ClipboardList size={20} /> : <Lock size={18} />} Take exam to certify
             </Link>
           )}
+          {!cert && price && !price.has_access && <BuyCertificateButton courseId={course.id} price={price} label="Buy certificate" className="btn-secondary" showPrice />}
           {p.done > 0 && (
             <button
               className="btn-ghost"
@@ -101,7 +103,12 @@ function CourseView({ course, user, certificates, attempts, resetCourse }) {
         </div>
         {!p.finished && !cert && (
           <p className="muted small">
-            Lessons are free. Complete them all to unlock the exam{price && !price.has_access ? ` — exam & certificate ${formatPrice(price.price_cents, price.currency)} incl. VAT` : ''}.
+            Lessons are free. Complete them all to unlock the exam
+            {price && !price.has_access
+              ? ` — exam & certificate ${formatPrice(price.price_cents, price.currency)} incl. VAT, which you can buy now or when you finish.`
+              : price?.has_access
+                ? ' — your exam & certificate are already paid for.'
+                : '.'}
           </p>
         )}
         {attempts.length > 0 && (

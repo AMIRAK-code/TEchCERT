@@ -54,7 +54,7 @@ const profiles = (await db.query('select email, role from public.profiles order 
 check('staff email becomes admin on sign-up', profiles.find(p => p.email === 'amir.akbari@inrebus.it')?.role === 'admin', profiles);
 check('other emails become learners', profiles.find(p => p.email === 'ada@example.com')?.role === 'learner', profiles);
 const linked = (await db.query('select cred_id from public.certificates where user_id = $1', [amir.id])).rows;
-check('pre-issued certificates attach to the new account', linked.length === 2, linked);
+check('pre-issued certificates attach to the new account (all four courses)', linked.length === 4, linked);
 
 let r = await as(ada.id, L, `select submit_exam('ai-security', 15, 15)`);
 check('exam rejected before lessons are complete', isError(r, 'Complete all lessons'), r);
@@ -68,6 +68,7 @@ check('exam rejected without a purchase', isError(r, 'Purchase the exam'), r);
 // --- pricing & purchases
 let price = (await as(null, 'anon', `select course_price('ai-prompt-engineer') p`))[0].p;
 check('anonymous visitors see the base price', price.price_cents === 199 && !price.discounted && !price.has_access, price);
+check('AI Prompt Engineer lists at €5.99 (intro offer €1.99)', price.list_cents === 599 && price.base_cents === 199, price);
 price = (await as(ada.id, L, `select course_price('ai-security') p`))[0].p;
 check('first purchase is full price (€4.99)', price.price_cents === 499 && !price.discounted && !price.has_access, price);
 r = await as(ada.id, L, `insert into purchases (user_id, course_id, stripe_session_id, amount_cents, currency) values ('${ada.id}', 'ai-security', 'cs_fake', 0, 'eur')`);
@@ -81,9 +82,9 @@ await db.query(`insert into purchases (user_id, course_id, stripe_session_id, st
 price = (await as(ada.id, L, `select course_price('ai-security') p`))[0].p;
 check('purchase grants exam access', price.has_access === true, price);
 price = (await as(ada.id, L, `select course_price('ai-prompt-engineer') p`))[0].p;
-check('later purchases are 20% off (€1.99 → €1.59)', price.price_cents === 159 && price.discounted && !price.has_access, price);
+check('later purchases are 20% off (€1.99 → €1.59)', price.price_cents === 159 && price.discounted && !price.has_access && price.list_cents === 599, price);
 price = (await as(ada.id, L, `select course_price('ai-marketing') p`))[0].p;
-check('later purchases are 20% off (€4.99 → €3.99)', price.price_cents === 399 && price.discounted, price);
+check('later purchases are 20% off (€4.99 → €3.99)', price.price_cents === 399 && price.discounted && price.list_cents === 499, price);
 r = await as(ada.id, L, 'select stripe_session_id from purchases');
 check('learner sees own purchases', r.length === 1 && r[0].stripe_session_id === 'cs_test_1', r);
 r = await as(null, 'anon', 'select * from purchases');
@@ -118,7 +119,7 @@ check('anonymous users cannot submit exams', isError(r, 'permission denied'), r)
 r = await as(amir.id, L, `select * from admin_issue_certificate('New.Person@x.com','New Person','ai-prompt-engineer')`);
 check('admin can issue a certificate', r[0]?.method === 'admin' && r[0]?.email === 'new.person@x.com', r);
 r = await as(amir.id, L, 'select count(*)::int n from certificates');
-check('admin sees all certificates', r[0].n === 6, r);
+check('admin sees all certificates', r[0].n === 10, r);
 r = await as(amir.id, L, `update certificates set revoked = true where cred_id = $1 returning revoked`, [pass.certificate.cred_id]);
 check('admin can revoke', r[0]?.revoked === true, r);
 r = await as(null, 'anon', `select revoked from verify_certificate($1)`, [pass.certificate.cred_id]);
@@ -160,6 +161,8 @@ check('anonymous users cannot call mark_email_verified', isError(r, 'permission 
 
 r = await db.exec(fs.readFileSync(root + '20261009000000_stripe_paywall.sql', 'utf8')).then(() => 'ok', e => e.message);
 check('paywall migration is idempotent', r === 'ok', r);
+r = await db.exec(fs.readFileSync(root + '20261011000000_list_price.sql', 'utf8')).then(() => 'ok', e => e.message);
+check('list-price migration is idempotent', r === 'ok', r);
 
 r = await db.exec(fs.readFileSync(root + '20260930000001_seed.sql', 'utf8')).then(() => 'ok', e => e.message);
 check('seed migration is idempotent', r === 'ok', r);
