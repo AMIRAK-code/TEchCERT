@@ -75,7 +75,7 @@ Legend — **Owner:** *Amir* = needs account-owner action, *Faraz* = code.
 
 ### P0 — launch blockers
 
-#### T1 · Configure Supabase auth redirect URLs — *Amir* (or Faraz once invited)
+#### T1 · Configure Supabase auth redirect URLs — *Amir* (or Faraz once invited) — **DONE 14 Oct 2026** (set via the Management API: Site URL, redirect allow-list, autoconfirm on, branded email templates and subjects)
 Magic links fail on the live domain until this is set.
 - Supabase → Authentication → URL Configuration
 - **Site URL:** `https://techcert.assist365.app`
