@@ -12,7 +12,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 const SITE_URL = Deno.env.get('SITE_URL') ?? 'https://techcert.assist365.app';
 const ALLOWED_ORIGINS = [SITE_URL, 'http://localhost:5173'];
 
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') ?? '', { httpClient: Stripe.createFetchHttpClient() });
+// trim: a key pasted with a trailing/leading newline makes every Stripe request fail
+const stripe = new Stripe((Deno.env.get('STRIPE_SECRET_KEY') ?? '').trim(), { httpClient: Stripe.createFetchHttpClient() });
 
 const secretKey = (() => {
   const keys = Deno.env.get('SUPABASE_SECRET_KEYS');
@@ -74,7 +75,7 @@ Deno.serve(async req => {
           },
         },
       ],
-      automatic_tax: { enabled: Deno.env.get('STRIPE_AUTOMATIC_TAX') !== 'false' },
+      automatic_tax: { enabled: (Deno.env.get('STRIPE_AUTOMATIC_TAX') ?? '').trim() !== 'false' },
       metadata,
       payment_intent_data: { metadata },
       success_url: `${base}/exam/${encodeURIComponent(course_id)}?checkout=success`,
@@ -83,7 +84,9 @@ Deno.serve(async req => {
 
     return reply(200, { url: session.url });
   } catch (err) {
-    console.error('create-checkout', err);
+    // Never log the raw error: Stripe connection errors include the request headers (the secret key).
+    const e = err as { type?: string; code?: string; message?: string };
+    console.error('create-checkout failed:', e.type ?? 'Error', e.code ?? '', String(e.message ?? '').slice(0, 300));
     return reply(500, { error: 'Could not start checkout. Please try again.' });
   }
 });

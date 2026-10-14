@@ -9,7 +9,8 @@
 import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') ?? '', { httpClient: Stripe.createFetchHttpClient() });
+// trim: a key pasted with a trailing/leading newline makes every Stripe request fail
+const stripe = new Stripe((Deno.env.get('STRIPE_SECRET_KEY') ?? '').trim(), { httpClient: Stripe.createFetchHttpClient() });
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
 
 const secretKey = (() => {
@@ -44,7 +45,7 @@ Deno.serve(async req => {
   const body = await req.text();
   let event: Stripe.Event;
   try {
-    event = await stripe.webhooks.constructEventAsync(body, signature ?? '', Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '', undefined, cryptoProvider);
+    event = await stripe.webhooks.constructEventAsync(body, signature ?? '', (Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '').trim(), undefined, cryptoProvider);
   } catch (err) {
     console.warn('stripe-webhook: bad signature', (err as Error).message);
     return new Response('Invalid signature', { status: 400 });
@@ -69,7 +70,9 @@ Deno.serve(async req => {
     }
   } catch (err) {
     // 500 makes Stripe retry the event later.
-    console.error('stripe-webhook', event.type, event.id, err);
+    // Log type and message only: raw Stripe errors can include the request headers (the secret key).
+    const e = err as { type?: string; code?: string; message?: string };
+    console.error('stripe-webhook failed:', event.type, event.id, e.type ?? 'Error', e.code ?? '', String(e.message ?? '').slice(0, 300));
     return new Response('Webhook handler failed', { status: 500 });
   }
 
