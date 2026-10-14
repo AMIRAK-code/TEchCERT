@@ -57,8 +57,12 @@ const here = () => window.location.origin + window.location.pathname;
 export async function signUpWithPassword(name, email, password) {
   const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name }, emailRedirectTo: here() } });
   if (error) throw error;
+  if (data.session) return 'signed-in';
+  // Email already registered: Supabase returns a placeholder user with no identities and
+  // sends no email (so outsiders can't probe which emails exist).
+  if (data.user && data.user.identities?.length === 0) return 'exists';
   // "Confirm email" still on in Supabase: no session until the link is opened.
-  return data.session ? 'signed-in' : 'confirm-sent';
+  return 'confirm-sent';
 }
 
 export async function signInWithPassword(email, password) {
