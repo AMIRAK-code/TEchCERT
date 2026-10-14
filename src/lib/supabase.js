@@ -52,17 +52,17 @@ export async function loadAccount(user) {
 
 const here = () => window.location.origin + window.location.pathname;
 
-// Email + password accounts. Sign-up logs the user in straight away (Supabase "Confirm email"
-// must be off); the email is verified later, after a purchase, with sendVerificationLink().
+// Email + password accounts. The sign-up function creates an account that is usable at
+// once (no confirmation email); the email is verified later, before buying.
 export async function signUpWithPassword(name, email, password) {
-  const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name }, emailRedirectTo: here() } });
-  if (error) throw error;
-  if (data.session) return 'signed-in';
-  // Email already registered: Supabase returns a placeholder user with no identities and
-  // sends no email (so outsiders can't probe which emails exist).
-  if (data.user && data.user.identities?.length === 0) return 'exists';
-  // "Confirm email" still on in Supabase: no session until the link is opened.
-  return 'confirm-sent';
+  const { error } = await supabase.functions.invoke('sign-up', { body: { name, email, password } });
+  if (error) {
+    const body = await error.context?.json?.().catch(() => null);
+    if (body?.error === 'exists') return 'exists';
+    throw new Error(body?.error || 'Could not create the account. Please try again.');
+  }
+  await signInWithPassword(email, password);
+  return 'signed-in';
 }
 
 export async function signInWithPassword(email, password) {

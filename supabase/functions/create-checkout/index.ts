@@ -44,6 +44,10 @@ Deno.serve(async req => {
     if (authError || !auth.user) return reply(401, { error: 'Sign in to buy the exam' });
     const user = auth.user;
 
+    // The payment and certificate are tied to this address, so it must be proven first.
+    const { data: profile } = await admin.from('profiles').select('email_verified_at').eq('id', user.id).single();
+    if (!profile?.email_verified_at) return reply(403, { error: 'Verify your email before buying.', code: 'verify_email' });
+
     const { course_id } = await req.json().catch(() => ({}));
     if (typeof course_id !== 'string') return reply(400, { error: 'course_id is required' });
 

@@ -158,6 +158,14 @@ function ExamFlow({ course }) {
           </>
         ) : confirming ? (
           <p className="muted">Confirming your payment…</p>
+        ) : price && !price.has_access && mode === 'cloud' && !user.emailVerified ? (
+          <>
+            <div className="price-tag">
+              <strong>{formatPrice(price.price_cents, price.currency)}</strong>
+              <span className="muted small">incl. VAT · one-time</span>
+            </div>
+            <VerifyEmailNotice beforePurchase />
+          </>
         ) : price && !price.has_access ? (
           <>
             {checkout === 'cancel' && <p className="muted small">Checkout was cancelled — you have not been charged.</p>}
