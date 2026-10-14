@@ -136,7 +136,7 @@ export async function adminSetRevoked(credId, revoked) {
 }
 
 // ---- paywall (exam + certificate are paid; lessons are free)
-// { base_cents, price_cents, discounted, currency, has_access }. Works signed out too.
+// { list_cents, base_cents, price_cents, discounted, currency, has_access }. Works signed out too.
 export async function getExamPrice(courseId) {
   const { data, error } = await supabase.rpc('course_price', { p_course_id: courseId });
   if (error) throw error;
@@ -151,6 +151,19 @@ export async function startCheckout(courseId) {
     throw new Error(body?.error || 'Could not start checkout. Please try again.');
   }
   window.location.assign(data.url);
+}
+
+// The price to show struck through (intro-offer list price or pre-discount price), or null.
+export function wasPrice(price) {
+  const was = price.list_cents ?? price.base_cents;
+  return was > price.price_cents ? was : null;
+}
+
+// Short reason for the reduced price, if any.
+export function priceNote(price) {
+  if (price.discounted) return 'returning-learner price, 20% off';
+  if (wasPrice(price)) return 'intro offer';
+  return '';
 }
 
 export function formatPrice(cents, currency = 'eur') {
