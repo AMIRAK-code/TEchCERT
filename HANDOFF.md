@@ -83,13 +83,14 @@ Magic links fail on the live domain until this is set.
 
 **Done when:** signing in on the live site with a real email lands you back on techcert.assist365.app, signed in.
 
-#### T2 · Custom SMTP for sign-in emails — *Amir*
-Supabase's built-in sender allows only a handful of emails per hour; a campaign would stall at the first few sign-ups.
-- Pick a provider (Resend, Postmark, SendGrid, Amazon SES). Verify a sending domain, e.g. `mail.assist365.app` (SPF/DKIM records go in Cloudflare DNS).
-- Supabase → Authentication → Emails → SMTP settings. Raise the auth rate limit afterwards (Authentication → Rate Limits).
-- Brand the magic-link email template (subject, sender name "techCert").
+#### T2 · Custom SMTP for sign-in emails — *Amir* (Brevo)
+Supabase's built-in sender allows only a few emails per hour. Use Brevo (account "assist365", free plan: 300 emails/day; SMTP relay already enabled).
+1. **Authenticate a sending domain in Brevo** — Brevo → Senders, Domains & Dedicated IPs → Domains → Add `assist365.app` → add the TXT/DKIM/DMARC records it shows in Cloudflare DNS (records only; don't touch the apex site). Then add sender `no-reply@assist365.app`, name "techCert". Don't send from the Gmail sender: mail from @gmail.com through Brevo fails Gmail's DMARC checks and lands in spam or bounces.
+2. **Brevo SMTP key** — Brevo → SMTP & API → SMTP → Generate a new SMTP key.
+3. **Supabase → Authentication → Emails → SMTP Settings** → enable custom SMTP: host `smtp-relay.brevo.com`, port `587`, username `bc08bb001@smtp-brevo.com`, password = the SMTP key, sender email `no-reply@assist365.app`, sender name `techCert`. Then Authentication → Rate Limits → raise "emails per hour" (e.g. 100).
+4. **Templates** — Authentication → Emails → Templates: paste `supabase/templates/magic-link.html` into "Magic Link" (subject "Confirm your email for techCert"), `reset-password.html` into "Reset Password" (subject "Reset your techCert password"), `confirm-signup.html` into "Confirm signup".
 
-**Done when:** 20 sign-ups in 10 minutes all receive their links; emails don't land in spam (check Gmail + Outlook).
+**Done when:** "Send verification link" and "Forgot password?" emails arrive from no-reply@assist365.app within a minute, in the inbox (check Gmail + Outlook).
 
 #### T3 · Keep learner progress before sign-in — *Faraz*
 In cloud mode, a signed-out learner's lesson progress lives only in React state: it is lost on refresh and on the magic-link redirect. This loses exactly the try-before-signup visitors marketing brings in.
