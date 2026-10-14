@@ -90,6 +90,11 @@ function CloudSignIn() {
       if (view === 'signup') {
         const result = await signUp(name, addr, password);
         if (result === 'confirm-sent') setSent({ to: addr, what: 'a confirmation link' });
+        if (result === 'exists') {
+          setView('signin');
+          setPassword('');
+          setError('An account with this email already exists. Sign in — or use “Forgot password?” or “Email me a sign-in link” below.');
+        }
       }
       if (view === 'reset') {
         await resetPassword(addr);
