@@ -1625,9 +1625,15 @@ input[type='range'] { width: 100%; accent-color: var(--accent); }
 .dash-row .grow { min-width: 200px; }
 .dash-row .course-icon { width: 40px; height: 40px; }
 
-.cert-tile { display: flex; flex-direction: column; gap: 8px; padding: 18px; border-top: 3px solid var(--ok); }
-.cert-tile:hover { border-color: var(--ink); border-top-color: var(--ok); }
-.cert-tile .small { font-family: var(--mono); font-size: 0.75rem; }
+.cert-list { display: flex; flex-direction: column; }
+.cert-row { border-left: 3px solid var(--ok); }
+.cert-row.revoked { border-left-color: var(--bad); }
+.cert-row.revoked h3 { color: var(--ink-3); text-decoration: line-through; }
+.cert-how { font-size: 0.92rem; color: var(--ink-2); margin-bottom: 2px; }
+.cert-row .small { font-size: 0.75rem; }
+.btn-row.tight { margin: 0; }
+.pill-ok { color: var(--ok); border-color: var(--ok); }
+.dash-row h3 .pill { vertical-align: middle; margin-left: 6px; }
 
 /* ---------- Motion preference ---------- */
 @media (prefers-reduced-motion: reduce) {
