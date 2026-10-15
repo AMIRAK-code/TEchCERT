@@ -162,6 +162,7 @@ function scenes(d) {
       id: 'zip', label: 'Download all', dur: 5,
       cap: 'Download all saves everything in one zip: the four files, the fix prompt and a full report to compare against next time.',
       steps: [
+        { at: 0.1, do: c => c.overlay('') },
         { at: 1, sel: '[data-zip]', click: true, do: c => c.overlay(`<div class="g-zip"><h6>seo-master-${esc(d.host)}.zip</h6>${['robots.txt', 'sitemap.xml', 'llms.txt', 'schema-homepage.html', 'seo-fix-prompt.md', 'report.json'].map((f, i) => `<span style="animation-delay:${0.12 * i}s">${f}</span>`).join('')}</div>`) },
         { at: 2.4, sel: '.g-zip' },
       ],
@@ -187,7 +188,7 @@ function scenes(d) {
 
 // ---------- player ----------
 
-export function mountGuide(root, data = SAMPLE, { autoplay = true } = {}) {
+export function mountGuide(root, data = SAMPLE, { autoplay = true, manual = false } = {}) {
   const S = scenes(data);
   let acc = 0;
   for (const s of S) {
@@ -278,7 +279,7 @@ export function mountGuide(root, data = SAMPLE, { autoplay = true } = {}) {
     r.style.left = `${pos[0]}%`;
     r.style.top = `${pos[1]}%`;
     stage.appendChild(r);
-    setTimeout(() => r.remove(), 700);
+    r.addEventListener('animationend', () => r.remove());
   }
 
   function runStep(st) {
@@ -344,7 +345,10 @@ export function mountGuide(root, data = SAMPLE, { autoplay = true } = {}) {
     raf = requestAnimationFrame(frame);
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
-    if (!playing || !visible) return;
+    if (playing && visible) tick(dt);
+  }
+
+  function tick(dt) {
     t += dt;
     if (t >= TOTAL) {
       t = TOTAL;
@@ -410,6 +414,37 @@ export function mountGuide(root, data = SAMPLE, { autoplay = true } = {}) {
 
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   seek(0);
+
+  // Frame-by-frame mode for exporting the video: the caller advances time, and every
+  // CSS animation is paused and moved forward by the same amount.
+  if (manual) {
+    setPlaying(true);
+    const advance = ms => {
+      for (const a of document.getAnimations()) {
+        if (a.seekTo === undefined) {
+          a.pause();
+          a.currentTime = 0;
+          a.seekTo = 0;
+        } else {
+          a.seekTo += ms;
+          a.currentTime = a.seekTo;
+        }
+      }
+    };
+    return {
+      duration: TOTAL,
+      step(dt) {
+        advance(dt * 1000);
+        if (t < TOTAL) tick(dt);
+        advance(0); // pause anything the new frame created, at its start
+      },
+      destroy() {
+        io.disconnect();
+        root.innerHTML = '';
+      },
+    };
+  }
+
   setPlaying(autoplay && !reduced);
   last = performance.now();
   raf = requestAnimationFrame(frame);
