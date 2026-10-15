@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/prerender-seo.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
-    "check": "oxlint && vite build",
-    "deploy": "vite build && wrangler deploy",
-    "test:db": "node scripts/test-db.mjs"
+    "check": "oxlint && npm run build",
+    "deploy": "npm run build && wrangler deploy",
+    "test:db": "node scripts/test-db.mjs",
+    "indexnow": "node scripts/indexnow.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
