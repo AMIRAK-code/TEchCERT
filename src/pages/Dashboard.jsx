@@ -70,7 +70,7 @@ export default function Dashboard() {
               <BadgeCheck size={28} color="var(--success)" />
               <strong>{getCourse(c.courseId)?.title}</strong>
               <span className="muted small">
-                {new Date(c.issuedAt).toLocaleDateString()} · {c.method === 'admin' ? 'admin-issued' : `${c.score}%`} · {c.credId}
+                {new Date(c.issuedAt).toLocaleDateString()} · {c.method === 'admin' ? 'awarded' : `${c.score}%`} · {c.credId}
               </span>
             </Link>
           ))}

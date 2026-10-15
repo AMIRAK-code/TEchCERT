@@ -289,15 +289,12 @@ h1 { font-size: clamp(2rem, 4vw, 2.6rem); letter-spacing: -0.025em; }
   letter-spacing: -0.01em;
 }
 
-.brand-mark {
-  width: 30px;
-  height: 30px;
-  display: grid;
-  place-items: center;
-  background: var(--ink);
-  color: var(--paper);
-  border-radius: var(--radius);
-}
+/* Logo mark (src/components/Logo.jsx) — follows the theme; the certificate overrides it below */
+.logo { display: block; flex-shrink: 0; }
+.logo-tile { fill: var(--ink); }
+.logo-corner { fill: none; stroke: var(--accent); stroke-width: 2.25; }
+.logo-check { fill: none; stroke: var(--paper); stroke-width: 3; stroke-linecap: square; }
+.logo-node { fill: var(--accent); }
 
 .nav-links { display: flex; gap: 22px; align-items: center; height: 100%; }
 
@@ -1553,11 +1550,12 @@ input[type='range'] { width: 100%; accent-color: var(--accent); }
   width: 56px;
   height: 56px;
   margin: 0 auto 20px;
-  display: grid;
-  place-items: center;
-  background: #151513;
-  color: #fdfcf8;
 }
+
+.certificate .logo-tile { fill: #151513; }
+.certificate .logo-check { stroke: #fdfcf8; }
+.certificate .logo-corner { stroke: #d9460c; }
+.certificate .logo-node { fill: #d9460c; }
 
 .certificate-kicker {
   font-family: var(--mono);
@@ -1603,6 +1601,7 @@ input[type='range'] { width: 100%; accent-color: var(--accent); }
 .certificate-foot > div + div { border-left: 1px solid #151513; }
 .certificate-foot .label { font-family: var(--mono); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: #7d7b73; font-weight: 400; margin-bottom: 2px; }
 .certificate-foot .mono { font-family: var(--mono); }
+.certificate-foot .certificate-parent { font-size: 0.8rem; color: #7d7b73; }
 
 @media (max-width: 600px) {
   .certificate { padding: 44px 22px 26px; }
