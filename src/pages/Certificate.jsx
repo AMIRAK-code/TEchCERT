@@ -5,7 +5,7 @@ import { getCourse } from '../data/courses';
 import { useApp } from '../store/AppStore';
 import { buildVerifyUrl } from '../lib/credential';
 import CertificateCard from '../components/CertificateCard';
-import { BRAND } from '../config';
+import { ISSUER } from '../config';
 
 export default function Certificate() {
   const { credId } = useParams();
@@ -35,7 +35,7 @@ export default function Certificate() {
     new URLSearchParams({
       startTask: 'CERTIFICATION_NAME',
       name: course.title,
-      organizationName: BRAND,
+      organizationName: ISSUER,
       issueYear: String(issued.getFullYear()),
       issueMonth: String(issued.getMonth() + 1),
       certUrl: verifyUrl,
@@ -61,7 +61,7 @@ export default function Certificate() {
         <h1>Congratulations, {cert.name.split(' ')[0]}!</h1>
         <p className="muted">
           {cert.method === 'admin'
-            ? `The ${course.title} certification was issued to you by ${BRAND} administration.`
+            ? `The ${course.title} certification was awarded to you by ${ISSUER}.`
             : `You passed the ${course.title} exam with a score of ${cert.score}%.`}
         </p>
       </div>

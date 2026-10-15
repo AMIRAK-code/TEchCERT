@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { Award, LayoutDashboard, LogOut, Menu, ShieldCheck, User, X } from 'lucide-react';
+import { LayoutDashboard, LogOut, Menu, ShieldCheck, User, X } from 'lucide-react';
 import { useApp } from '../store/AppStore';
+import Logo from './Logo';
 import { BRAND } from '../config';
 
 export default function Navbar() {
@@ -13,9 +14,7 @@ export default function Navbar() {
     <nav className="navbar">
       <div className="container">
         <Link to="/" className="nav-brand" onClick={close}>
-          <span className="brand-mark">
-            <Award size={18} />
-          </span>
+          <Logo size={30} />
           <span>{BRAND}</span>
         </Link>
         <button className="nav-toggle" aria-label="Toggle menu" onClick={() => setOpen(!open)}>
