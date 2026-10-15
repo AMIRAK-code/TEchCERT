@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SEO Master | Audit any site for Google and AI search</title>
+    <meta name="description" content="Enter a URL. SEO Master crawls the site, scores it for search engines and AI answer engines, and writes the robots.txt, sitemap.xml, llms.txt, structured data and fix list for you." />
+    <meta name="theme-color" content="#f4f3ef" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="guide.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/"><span class="mark" aria-hidden="true"></span>SEO Master</a>
+      <span class="by">by assist365</span>
+      <a class="howto" href="/guide">How to use</a>
+    </header>
+
+    <main>
+      <section class="hero" id="hero">
+        <h1>Audit any site for Google <em>and</em> AI search.</h1>
+        <p class="lede">Enter a URL. SEO Master crawls the site, checks what search engines and AI answer engines actually see, and writes the files and fix list to correct it.</p>
+
+        <form id="form" class="run" autocomplete="off">
+          <label class="sr" for="url">Website address</label>
+          <input id="url" name="url" type="text" inputmode="url" placeholder="yourwebsite.com" required />
+          <button id="go" type="submit">Analyze</button>
+        </form>
+        <div class="opts">
+          <label>Pages to crawl
+            <select id="max">
+              <option value="25">25</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="training" checked /> Allow AI training crawlers in the generated robots.txt</label>
+        </div>
+
+        <ul class="does">
+          <li><b>Technical</b> robots.txt, sitemaps, HTTPS, status codes, speed</li>
+          <li><b>On-page</b> titles, descriptions, headings, canonicals, share tags</li>
+          <li><b>AI search</b> AI crawler access, llms.txt, JS-only content, structured data</li>
+          <li><b>Writes</b> robots.txt, sitemap.xml, llms.txt, JSON-LD, head tags, fix prompt</li>
+        </ul>
+      </section>
+
+      <section id="progress" class="progress" hidden>
+        <div class="bar"><i id="bar"></i></div>
+        <p id="status">Starting…</p>
+      </section>
+
+      <p id="error" class="error" role="alert" hidden></p>
+
+      <section id="results" hidden>
+        <div id="guide" class="guide-wrap"></div>
+
+        <div class="summary">
+          <div class="site">
+            <h2 id="site-name"></h2>
+            <p id="site-meta" class="muted"></p>
+          </div>
+          <div class="scores" id="scores"></div>
+        </div>
+
+        <nav class="tabs" role="tablist">
+          <button role="tab" data-tab="issues" aria-selected="true">Issues</button>
+          <button role="tab" data-tab="ai">AI search</button>
+          <button role="tab" data-tab="pages">Pages</button>
+          <button role="tab" data-tab="files">Files</button>
+          <button role="tab" data-tab="prompt">Fix prompt</button>
+          <button role="tab" data-tab="index">Submit</button>
+          <span class="grow"></span>
+          <button id="zip" class="ghost">Download all</button>
+        </nav>
+
+        <div class="panel" data-panel="issues"></div>
+        <div class="panel" data-panel="ai" hidden></div>
+        <div class="panel" data-panel="pages" hidden></div>
+        <div class="panel" data-panel="files" hidden></div>
+        <div class="panel" data-panel="prompt" hidden></div>
+        <div class="panel" data-panel="index" hidden></div>
+      </section>
+    </main>
+
+    <dialog id="page-dialog"><div id="page-detail"></div></dialog>
+
+    <footer class="foot">SEO Master reads public pages only and stores nothing. Generated text is a draft: review it before publishing.</footer>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
