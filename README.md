@@ -1,111 +1,119 @@
 # techCert
 
-Interactive technical certification courses — React + Vite, with optional Supabase backend.
+techCert is an online certification platform for practical AI skills, run by techCert365 Academy, part of assist365. Learners work through short, hands-on courses, pass a timed exam, and receive a certificate that anyone can verify online.
 
-**Live:** https://techcert.assist365.app · Cloudflare Worker `techcert` · Supabase project `techcert` (`dtcovmttntdwihzxsuvl`, eu-central-1). Redeploy with `npm run deploy`.
+Live site: https://techcert.assist365.app
 
-**Open work:** see [HANDOFF.md](HANDOFF.md) for the prioritized task list before launch.
+## What the platform offers
 
-## Certifications
+Most AI courses stop at reading and watching. techCert courses are built around doing. Every lesson contains interactive exercises that run in the browser: learners tune sampling settings and watch the output change, attack and defend a simulated chatbot, design an agent's permissions, assemble a retrieval pipeline, or audit a robots.txt file. A lesson only counts as complete once its activities are done, so a certificate reflects practice, not just attendance.
 
-| Course | Lessons | Highlights |
+### Certifications
+
+| Certification | What it covers |
+| --- | --- |
+| AI Prompt Engineer | How large language models process text, sampling settings, prompt structure, few-shot and chain-of-thought prompting, structured output, retrieval-augmented generation, and evaluating prompts before they ship. |
+| AI Security Professional | The OWASP Top 10 for LLM applications, direct and indirect prompt injection, excessive agency in AI agents, data poisoning, model extraction and inference attacks, secure code review, and incident response. |
+| AI Marketing Specialist | Using generative AI across the marketing funnel: audience research grounded in evidence, brand voice and briefs, content production, experimentation and A/B testing, and responsible use. |
+| AI SEO & GEO Specialist | Search fundamentals in an era of AI answers: technical SEO and Core Web Vitals, helpful content and E-E-A-T, search intent, structured data, generative engine optimization, AI crawlers and llms.txt, and measuring visibility. |
+
+Each certification has eight lessons grouped into modules.
+
+### How learners get certified
+
+1. **Learn.** All lessons are free. Progress is saved to the learner's account and syncs across devices.
+2. **Unlock the exam.** When every lesson is complete, the learner can purchase the exam and certificate for that course. The AI Prompt Engineer certification is offered at an introductory price; returning learners receive a discount on every further certification.
+3. **Pass the exam.** Fifteen questions are drawn at random from the course's question bank, with a 25-minute time limit and a pass mark of 70 percent. Retakes are included.
+4. **Share the certificate.** The certificate shows the holder's name, the certification, the date and a unique credential ID. It can be saved as a PDF, added to LinkedIn in one click, and shared through a verification link.
+
+### Verification
+
+Every certificate carries a credential ID such as `TC-XXXX-XXXX`. Anyone, including employers and clients, can enter that ID at [techcert.assist365.app/verify](https://techcert.assist365.app/verify) to confirm that the certificate is genuine, who holds it, and whether it is still valid. Certificates can be revoked by the academy, and a revoked credential is reported as such.
+
+### Accounts and payments
+
+Learners sign up with an email address and password and can start immediately. Before their first purchase they confirm their email through a one-time link, which protects their payment and certificate. Payments are handled by Stripe Checkout; card details never reach techCert. Prices include VAT.
+
+## Technical overview
+
+The front end is a single-page React application built with Vite and served from a Cloudflare Worker. The back end is Supabase: Postgres for data, Supabase Auth for accounts, and Edge Functions for sign-up and payments. Transactional email is sent through Brevo from `no-reply@assist365.app`.
+
+| Layer | Technology |
+| --- | --- |
+| Front end | React 19, React Router, Vite |
+| Hosting | Cloudflare Workers (static assets), custom domain `techcert.assist365.app` |
+| Database and auth | Supabase (Postgres with row-level security, Supabase Auth), region eu-central-1 |
+| Server logic | Postgres functions (exam submission, pricing, verification) and Supabase Edge Functions (`sign-up`, `create-checkout`, `stripe-webhook`) |
+| Payments | Stripe Checkout with signed webhooks |
+| Email | Brevo SMTP relay, authenticated sending domain `assist365.app` |
+| CI/CD | GitHub Actions: lint, database tests, build and deploy on every push to `main` |
+
+### How the data is protected
+
+- Row-level security is enabled on every table. Learners can read only their own progress, attempts, purchases and certificates.
+- Certificates cannot be written from the browser. They are issued by the `submit_exam` database function, which checks lesson completion, exam size, the pass mark and payment, or by an administrator.
+- Prices are computed in one place on the server (`price_for`), and only the Stripe webhook, verified by its signature, can record a purchase.
+- Email verification is set by the server only when the session was opened through an emailed link, so the browser cannot fake it.
+- `npm run test:db` runs the migrations against an in-memory Postgres and checks these rules. It runs in CI before every deploy.
+
+### Run modes
+
+| | Local mode (no environment variables) | Cloud mode (Supabase configured) |
 | --- | --- | --- |
-| **AI Prompt Engineer** | 8 lessons / 3 modules | Tokenizer playground, temperature & top-p sampler, prompt builder, few-shot simulator, chain-of-thought experiment, RAG pipeline, evaluation scenario |
-| **AI Security Professional** | 8 lessons / 4 modules | Prompt-injection attack lab, agent-permission design, data-poisoning simulator, model-extraction simulator, secure-code reviews, incident response |
+| Accounts | Name and email, no verification | Email and password through Supabase Auth |
+| Progress | Stored in the browser | Stored in Postgres, synced across devices |
+| Certificates | Issued in the browser | Issued by the server after its checks |
+| Payments | None | Stripe Checkout |
 
-Each lesson has required hands-on activities; the exam unlocks when every lesson is complete. Exam: 15 questions from a 20-question bank, shuffled, 25-minute timer, 70% to pass.
-
-## Two run modes
-
-| | **Local mode** (no env vars) | **Cloud mode** (Supabase configured) |
-| --- | --- | --- |
-| Sign-in | Name + email, no verification | Email magic link (Supabase Auth) |
-| Progress & attempts | This browser's localStorage | Postgres, synced across devices |
-| Certificate issuing | In the browser | `submit_exam()` on the server checks lessons completed, exam size and pass mark |
-| Verification | Built-in registry + link self-check | Database lookup via `verify_certificate()` — works for every certificate, anywhere |
-| Admin role | Anyone who types a staff email (**not secure**) | Granted by the database from `staff_allowlist` |
-
-Use local mode for development and demos only. Deploy with Supabase.
-
-## Internal admins & pre-issued certificates
-
-Staff are defined in `src/data/registry.js` and `supabase/migrations/20260930000001_seed.sql`:
-
-| Name | Email | Role |
-| --- | --- | --- |
-| Amirhossein Akbari | amir.akbari@inrebus.it | admin |
-| Faraz Haghgoo | faraz.haghgoo@inrebus.it | admin |
-
-Each holds both certifications (admin-issued, 30 Sep 2026):
-
-| Credential ID | Holder | Certification |
-| --- | --- | --- |
-| TC-FMDD-AWYL | Amirhossein Akbari | AI Prompt Engineer |
-| TC-5RZJ-LG5J | Amirhossein Akbari | AI Security Professional |
-| TC-NERP-6NUB | Faraz Haghgoo | AI Prompt Engineer |
-| TC-SC7C-EZBE | Faraz Haghgoo | AI Security Professional |
-
-Verify at `/verify?id=<credential ID>`. Admins get an **Admin** page (`/admin`) listing staff and certificates; in cloud mode they can also issue and revoke certificates there.
+Local mode is for development and demonstrations only.
 
 ## Development
 
 ```bash
 npm install
-npm run dev          # local mode unless .env has Supabase keys
-npm run check        # lint + production build
-npm run test:db      # database security checks (in-memory Postgres)
+npm run dev          # http://localhost:5173, local mode unless .env has Supabase keys
+npm run check        # lint and production build
+npm run test:db      # database security checks (in-memory Postgres, no network)
 ```
 
-## Supabase setup
+To work against the real back end, copy `.env.example` to `.env` and fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` from Supabase, Project Settings, API. The publishable key is public by design; the row-level-security policies are what protect the data. Note that this points the development server at the production database.
 
-1. Create a project at supabase.com.
-2. Apply the migrations — either paste both files from `supabase/migrations/` (in order) into the SQL editor, or with the CLI:
-   ```bash
-   npx supabase init        # once, creates supabase/config.toml
-   npx supabase link --project-ref <your-project-ref>
-   npx supabase db push
-   ```
-3. **Authentication → URL Configuration**: set *Site URL* to your production URL and add it (plus `http://localhost:5173`) to *Redirect URLs*. Magic links only redirect to listed URLs.
-4. Copy `.env.example` to `.env` and fill in *Project URL* and *anon public key* from **Project Settings → API**.
-5. For production email volume, configure custom SMTP (**Authentication → Emails**); Supabase's built-in sender is rate-limited.
-
-Staff become admins automatically the first time they sign in with their allowlisted email. To add an admin later, insert into `staff_allowlist` (and, if they already have an account, update their `profiles.role`).
-
-If you change a course's pass mark, lesson count or exam size in `src/data/*.js`, update the `courses` table too — the server enforces those values.
-
-## Deployment
-
-The app is a static SPA; any static host works.
-
-**Cloudflare (recommended if your domain is on Cloudflare)** — config in `wrangler.jsonc`, headers in `public/_headers`:
-
-```bash
-npx wrangler login      # once, opens the browser
-npm run deploy          # builds and uploads to https://techcert.<your-subdomain>.workers.dev
-```
-
-Then in the Cloudflare dashboard: **Workers & Pages → techcert → Settings → Domains & Routes → Add → Custom domain**, and enter your domain (repeat for `www` if you want it). DNS and HTTPS are set up automatically.
-
-**Vercel** (config in `vercel.json`): import the repo and add the env vars under *Settings → Environment Variables*.
-
-`VITE_*` variables are baked in at build time. With `npm run deploy` the build runs on your machine, so they come from your local `.env`; redeploy after changing them. The anon key is public by design; the row-level-security policies in the migration are what protect the data.
-
-After adding a custom domain, add it to Supabase **Authentication → URL Configuration** (Site URL and Redirect URLs), or magic-link sign-in will not redirect back to it.
-
-## Project structure
+### Project structure
 
 ```
 src/
-  config.js             brand name, credential prefix, env vars
-  data/                 course content, exam banks, staff & certificate registry
-  components/blocks/    interactive activities (exercises, prompt labs, security labs)
+  config.js             brand, issuer name, credential prefix, environment variables
+  data/                 course content, exam question banks, staff certificate registry
+  components/           shared UI, including Logo and CertificateCard
+  components/blocks/    interactive activities and labs
   pages/                Home, Course, Lesson, Exam, Certificate, Verify, Dashboard, Admin
-  store/AppStore.jsx    app state; switches between local and cloud mode
+  store/AppStore.jsx    application state, switches between local and cloud mode
   lib/supabase.js       Supabase client and all database calls
-supabase/migrations/    schema, RLS policies, RPCs, seed data
+supabase/
+  migrations/           schema, row-level security, database functions, seed data
+  functions/            Edge Functions: sign-up, create-checkout, stripe-webhook
+  templates/            branded authentication emails
+scripts/test-db.mjs     database security test suite
 ```
+
+### Adding a course
+
+Courses are data. Add a file in `src/data/`, register it in `src/data/courses.js`, and add a matching row to the `courses` table in a new migration (lesson count, exam size, pass mark and price). The server enforces the values in the table, so keep both in sync.
+
+## Deployment
+
+Every push to `main` triggers the Deploy workflow in `.github/workflows/deploy.yml`. It installs dependencies, runs the linter and the database tests, builds the site and publishes it to Cloudflare with `wrangler deploy`. The workflow needs two repository secrets under Settings, Secrets and variables, Actions:
+
+- `CLOUDFLARE_API_TOKEN`: a Cloudflare API token with the Workers Scripts Edit permission.
+- `CLOUDFLARE_ACCOUNT_ID`: the Cloudflare account that owns the `techcert` Worker.
+
+To deploy by hand from a machine logged in with `npx wrangler login`, run `npm run deploy`. It builds with the values in your local `.env`, so check that it points at production first.
+
+Database changes go in a new timestamped file in `supabase/migrations/`; never edit a migration that has already been applied. Edge Function secrets (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) are set in Supabase and never committed to the repository.
 
 ## Known limitations
 
-- Exam questions and answers ship in the JavaScript bundle, and the browser reports the score to `submit_exam()`. The server validates lesson completion, exam size and pass mark, but a technical user could still submit a fabricated score. For high-stakes certification, move the question bank and grading into a Supabase Edge Function.
-- Lesson completion is recorded by the client; the server trusts it.
+- Exam questions and answers are currently shipped to the browser, and the browser reports the score to the server. The server validates everything else, but a technical user could submit a fabricated score. Moving the question bank and grading to the server is the top item in [HANDOFF.md](HANDOFF.md).
+- Lesson completion is recorded by the client and trusted by the server.
+
+See [HANDOFF.md](HANDOFF.md) for the full list of open work.
