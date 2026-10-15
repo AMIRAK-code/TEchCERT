@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How to use SEO Master | Step-by-step guide</title>
+    <meta name="description" content="A one-minute walkthrough of SEO Master: read your issues, check AI search access, fix pages, upload the generated files, use the fix prompt and submit your site to search engines." />
+    <meta name="theme-color" content="#f4f3ef" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="guide.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/"><span class="mark" aria-hidden="true"></span>SEO Master</a>
+      <span class="by">by assist365</span>
+      <a class="howto" href="/">Run an audit</a>
+    </header>
+    <main>
+      <section class="hero compact-guide">
+        <h1>How to use SEO Master</h1>
+        <p class="lede">One minute, tab by tab: what each section shows, what to do with your downloads, and how to submit your site to search engines.</p>
+      </section>
+      <div id="player"></div>
+      <div id="steps"></div>
+      <p class="guide-cta"><a class="cta-btn" href="/">Analyze your site →</a></p>
+    </main>
+    <footer class="foot">The video uses example data. After an audit, the same guide plays with your own results.</footer>
+    <script type="module">
+      import { mountGuide, SAMPLE, stepsHtml } from './guide.js';
+      mountGuide(document.getElementById('player'), SAMPLE, { autoplay: true });
+      document.getElementById('steps').innerHTML = stepsHtml({ open: true });
+    </script>
+  </body>
+</html>

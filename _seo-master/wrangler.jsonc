@@ -1,0 +1,10 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "seo-master",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-01",
+  // Test domain; Cloudflare creates the DNS record and certificate.
+  "routes": [{ "pattern": "seo.assist365.app", "custom_domain": true }],
+  // Static UI from public/; anything not found there (the /api/* routes) runs the Worker.
+  "assets": { "directory": "./public" }
+}
