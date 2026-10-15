@@ -1,21 +1,15 @@
-name: Deploy
+name: Checks
 
-# Every push to main is checked, then deployed to Cloudflare (techcert.assist365.app).
-# Repository settings → Secrets and variables → Actions:
-#   secrets:   CLOUDFLARE_API_TOKEN (template "Edit Cloudflare Workers"), CLOUDFLARE_ACCOUNT_ID
-#   variables (optional): VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY — default to the production
-#   project below; both values are public by design (row-level security protects the data).
+# GitHub is the backup and version-control copy; the site is deployed from a local
+# machine with `npm run deploy` (wrangler), never from here. This workflow only checks
+# that every push to main lints, passes the database tests and builds.
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-concurrency:
-  group: deploy
-  cancel-in-progress: false
-
 jobs:
-  deploy:
+  checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,18 +20,4 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run test:db
-      - name: Build
-        run: npm run build
-        env:
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || 'https://dtcovmttntdwihzxsuvl.supabase.co' }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || 'sb_publishable_eLcwcntuaHHUNzgat4Dy7Q_0V65CpIi' }}
-      - name: Require Cloudflare credentials
-        run: |
-          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ] || [ -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]; then
-            echo "::error::Add the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repository secrets."; exit 1
-          fi
-      - name: Deploy to Cloudflare
-        run: npx wrangler deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: npm run build

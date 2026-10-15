@@ -67,7 +67,7 @@ npm run deploy     # build + deploy to techcert.assist365.app
     1. Stripe (test mode): Settings → Tax → add head-office address, turn on Stripe Tax, register for EU OSS when going live. Developers → Webhooks → add endpoint `https://dtcovmttntdwihzxsuvl.supabase.co/functions/v1/stripe-webhook` with events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded`; copy its signing secret.
     2. Supabase → Edge Functions → Secrets: `STRIPE_SECRET_KEY` (sk_test_…), `STRIPE_WEBHOOK_SECRET` (whsec_…). Optional: `SITE_URL`, `STRIPE_AUTOMATIC_TAX=false` to test before Stripe Tax is set up. **Never put Stripe secret keys in `.env`, the repo or GitHub.**
     3. Apply the migration and deploy both functions (Supabase connector, or `supabase db push` + `supabase functions deploy`).
-    4. Merge to `main` → the Deploy workflow ships the site (needs T13 secrets). Until the new site is live, the old site still shows "Start exam" but its submission will be rejected for unpaid learners, so do steps 3 and 4 together.
+    4. Push to `main` (backup) and run `npm run deploy` locally to ship the site (see T13). Until the new site is live, the old site still shows "Start exam" but its submission will be rejected for unpaid learners, so do steps 3 and 4 together.
     5. Test with card 4242 4242 4242 4242: buy a course → exam unlocks; buy a second → 20% off; refund in Stripe → access removed.
     6. Switch to live keys (new webhook endpoint + secret in live mode).
 
@@ -154,10 +154,8 @@ Enforce server-side (in `start_exam`, T4): e.g. max 3 attempts per course per 24
 #### T12 · More courses — *Faraz*
 Courses are data: add a file in `src/data/`, register it in `src/data/courses.js`, add a row to the `courses` table (pass mark, lesson count, exam size), and questions (T4). Block types are listed in the README.
 
-#### T13 · Automatic deploys — *Amir* (secrets only; workflow done)
-`.github/workflows/deploy.yml` lints, tests, builds and runs `wrangler deploy` on every push to `main`. One-time setup in GitHub → Settings → Secrets and variables → Actions:
-- **Secrets:** `CLOUDFLARE_API_TOKEN` (Cloudflare → My Profile → API Tokens → template "Edit Cloudflare Workers", scoped to the account) and `CLOUDFLARE_ACCOUNT_ID`.
-- **Variables:** `VITE_SUPABASE_URL` = `https://dtcovmttntdwihzxsuvl.supabase.co`, `VITE_SUPABASE_ANON_KEY` = the publishable key (`sb_publishable_…`, public by design).
+#### T13 · Deploys — **DECIDED 15 Oct 2026: deploy from a local machine only**
+The site is deployed with `npm run deploy` (wrangler, logged in on the deploying machine). GitHub is the version-control backup only: `.github/workflows/deploy.yml` ("Checks") runs lint, `test:db` and build on every push to `main` and never deploys, so no Cloudflare secrets are stored in GitHub.
 
 The workflow fails early if the variables are missing, so it never ships a local-mode build.
 
