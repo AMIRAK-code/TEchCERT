@@ -46,7 +46,7 @@ The front end is a single-page React application built with Vite and served from
 | Server logic | Postgres functions (exam submission, pricing, verification) and Supabase Edge Functions (`sign-up`, `create-checkout`, `stripe-webhook`) |
 | Payments | Stripe Checkout with signed webhooks |
 | Email | Brevo SMTP relay, authenticated sending domain `assist365.app` |
-| CI/CD | GitHub Actions: lint, database tests, build and deploy on every push to `main` |
+| Deployment | `npm run deploy` from a local machine (Vite build, then `wrangler deploy`); GitHub is the backup, with checks on every push |
 
 ### How the data is protected
 
@@ -54,7 +54,7 @@ The front end is a single-page React application built with Vite and served from
 - Certificates cannot be written from the browser. They are issued by the `submit_exam` database function, which checks lesson completion, exam size, the pass mark and payment, or by an administrator.
 - Prices are computed in one place on the server (`price_for`), and only the Stripe webhook, verified by its signature, can record a purchase.
 - Email verification is set by the server only when the session was opened through an emailed link, so the browser cannot fake it.
-- `npm run test:db` runs the migrations against an in-memory Postgres and checks these rules. It runs in CI before every deploy.
+- `npm run test:db` runs the migrations against an in-memory Postgres and checks these rules. Run it before every deploy; GitHub also runs it on every push.
 
 ### Run modes
 
@@ -102,12 +102,17 @@ Courses are data. Add a file in `src/data/`, register it in `src/data/courses.js
 
 ## Deployment
 
-Every push to `main` triggers the Deploy workflow in `.github/workflows/deploy.yml`. It installs dependencies, runs the linter and the database tests, builds the site and publishes it to Cloudflare with `wrangler deploy`. The workflow needs two repository secrets under Settings, Secrets and variables, Actions:
+The site is deployed from a local machine, not from GitHub. On a machine logged in to Cloudflare with `npx wrangler login`, run:
 
-- `CLOUDFLARE_API_TOKEN`: a Cloudflare API token with the Workers Scripts Edit permission.
-- `CLOUDFLARE_ACCOUNT_ID`: the Cloudflare account that owns the `techcert` Worker.
+```bash
+npm run check        # lint and build
+npm run test:db      # database security checks
+npm run deploy       # build and publish to techcert.assist365.app
+```
 
-To deploy by hand from a machine logged in with `npx wrangler login`, run `npm run deploy`. It builds with the values in your local `.env`, so check that it points at production first.
+`npm run deploy` builds with the values in your local `.env`, so check that it points at production first.
+
+GitHub holds the version-controlled backup of the code. The Checks workflow in `.github/workflows/deploy.yml` runs the linter, the database tests and a build on every push to `main`, but it never deploys.
 
 Database changes go in a new timestamped file in `supabase/migrations/`; never edit a migration that has already been applied. Edge Function secrets (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) are set in Supabase and never committed to the repository.
 
